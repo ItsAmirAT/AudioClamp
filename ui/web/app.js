@@ -75,10 +75,10 @@ function renderMeter(now) {
 
   ctx.clearRect(0, 0, w, h);
 
-  const padTop = 13;
-  const padBottom = 16;
-  const padLeft = 40;
-  const padRight = 78;
+  const padTop = 18;
+  const padBottom = 22;
+  const padLeft = 48;
+  const padRight = 86;
   const meterH = Math.max(10, h - padTop - padBottom);
   const availW = Math.max(10, w - padLeft - padRight);
 
@@ -100,7 +100,7 @@ function renderMeter(now) {
   const dbTicks = [0, -6, -12, -18, -24, -30, -36];
   ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
   ctx.fillStyle = "#94a3b8";
-  ctx.font = "700 9.5px 'Segoe UI Variable Text', -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.font = "700 11px 'Segoe UI Variable Text', -apple-system, BlinkMacSystemFont, sans-serif";
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
 
@@ -129,7 +129,7 @@ function renderMeter(now) {
     ctx.setLineDash([]);
 
     ctx.fillStyle = "rgba(0, 242, 254, 0.85)";
-    ctx.font = "800 8.5px 'Segoe UI Variable Text', sans-serif";
+    ctx.font = "800 9.5px 'Segoe UI Variable Text', sans-serif";
     ctx.textAlign = "left";
     ctx.fillText("DISTANCE DYNAMICS ZONE (SOFT-KNEE 4:1)", padLeft + 8, kneeBotY - 4);
   }
@@ -139,7 +139,7 @@ function renderMeter(now) {
   const barW = Math.max(28, Math.floor((availW - (numCh - 1) * barGap) / numCh));
   const chNames = ["LEFT (L)", "RIGHT (R)", "CENTER", "LFE", "SURROUND L", "SURROUND R"];
 
-  const numSegments = 22;
+  const numSegments = 26;
   const segHeight = Math.max(2, Math.floor((meterH - (numSegments - 1) * 2) / numSegments));
 
   for (let i = 0; i < numCh; i++) {
@@ -196,9 +196,9 @@ function renderMeter(now) {
     }
 
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "800 8.5px 'Segoe UI Variable Text', sans-serif";
+    ctx.font = "800 10px 'Segoe UI Variable Text', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(chNames[i] || `CH${i+1}`, bx + barW / 2, padTop + meterH + 12);
+    ctx.fillText(chNames[i] || `CH${i+1}`, bx + barW / 2, padTop + meterH + 15);
   }
 
   const threshY = Math.round(dbToY(state.threshold_db)) + 0.5;
@@ -209,8 +209,8 @@ function renderMeter(now) {
   ctx.lineTo(padLeft + availW + 2, threshY);
   ctx.stroke();
 
-  const badgeW = 84;
-  const badgeH = 20;
+  const badgeW = 94;
+  const badgeH = 22;
   const badgeX = padLeft + availW - badgeW - 6;
   const badgeY = Math.round(threshY - badgeH / 2);
 
@@ -223,7 +223,7 @@ function renderMeter(now) {
   ctx.stroke();
 
   ctx.fillStyle = "#ff2a5f";
-  ctx.font = "800 9.5px 'Segoe UI Variable Text', sans-serif";
+  ctx.font = "800 10.5px 'Segoe UI Variable Text', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`LIMIT: ${state.threshold_db.toFixed(1)} dB`, badgeX + badgeW / 2, threshY);
@@ -251,7 +251,7 @@ function renderMeter(now) {
   }
 
   ctx.fillStyle = "#94a3b8";
-  ctx.font = "800 8.5px 'Segoe UI Variable Text', sans-serif";
+  ctx.font = "800 9.5px 'Segoe UI Variable Text', sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("LIMIT GR", grX + grW / 2, padTop - 6);
 
@@ -263,7 +263,7 @@ canvas.addEventListener("mousedown", (e) => {
   const rect = canvas.getBoundingClientRect();
   const y = e.clientY - rect.top;
   const threshY = (function() {
-    const minDb = -36.0, maxDb = 0.0, padTop = 18, meterH = rect.height - padTop - 24;
+    const minDb = -36.0, maxDb = 0.0, padTop = 18, meterH = rect.height - padTop - 22;
     const clamped = Math.max(minDb, Math.min(maxDb, state.threshold_db));
     return padTop + (1.0 - (clamped - minDb) / (maxDb - minDb)) * meterH;
   })();
@@ -278,7 +278,7 @@ window.addEventListener("mousemove", (e) => {
   const rect = canvas.getBoundingClientRect();
   const y = e.clientY - rect.top;
   const padTop = 18;
-  const meterH = rect.height - padTop - 24;
+  const meterH = rect.height - padTop - 22;
   const norm = Math.max(0, Math.min(1, 1.0 - (y - padTop) / meterH));
   const newDb = -36.0 + norm * 36.0;
   updateCeiling(newDb);
