@@ -21,6 +21,11 @@ Start-Sleep -Milliseconds 600
 
 $TargetExe = Join-Path $InstallDir "$AppName.exe"
 Copy-Item -Path $SourceExe -Destination $TargetExe -Force
+Unblock-File -Path $TargetExe -ErrorAction SilentlyContinue
+
+# Ensure clean automatic Windows startup (remove legacy entries and set AudioClamp)
+Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "SoundLockPro" -ErrorAction SilentlyContinue
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "AudioClamp" -Value "`"$TargetExe`" --minimized"
 
 # Create Desktop Shortcut
 $WshShell = New-Object -ComObject WScript.Shell
@@ -30,6 +35,7 @@ $DesktopShortcut.TargetPath = $TargetExe
 $DesktopShortcut.WorkingDirectory = $InstallDir
 $DesktopShortcut.Description = "AudioClamp - Studio Peak Limiter"
 $DesktopShortcut.Save()
+Unblock-File -Path (Join-Path $DesktopPath "$AppName.lnk") -ErrorAction SilentlyContinue
 
 # Create Start Menu Shortcut
 $StartMenuPath = [Environment]::GetFolderPath("Programs")
@@ -38,6 +44,7 @@ $StartShortcut.TargetPath = $TargetExe
 $StartShortcut.WorkingDirectory = $InstallDir
 $StartShortcut.Description = "AudioClamp - Studio Peak Limiter"
 $StartShortcut.Save()
+Unblock-File -Path (Join-Path $StartMenuPath "$AppName.lnk") -ErrorAction SilentlyContinue
 
 Write-Host "Installation completed successfully!" -ForegroundColor Green
 Write-Host "Installed to: $TargetExe" -ForegroundColor Yellow

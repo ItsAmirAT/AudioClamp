@@ -135,6 +135,18 @@ class ConfigManager:
     def __init__(self):
         os.makedirs(APPDATA_DIR, exist_ok=True)
         self.config: Dict[str, Any] = self.load_config()
+        self._cleanup_legacy_registry()
+
+    def _cleanup_legacy_registry(self):
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as key:
+                try:
+                    winreg.DeleteValue(key, "SoundLockPro")
+                except FileNotFoundError:
+                    pass
+        except Exception:
+            pass
 
     def load_config(self) -> Dict[str, Any]:
         if os.path.exists(CONFIG_PATH):
@@ -226,6 +238,11 @@ class ConfigManager:
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
         try:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as key:
+                try:
+                    winreg.DeleteValue(key, "SoundLockPro")
+                except FileNotFoundError:
+                    pass
+
                 if enabled:
                     winreg.SetValueEx(key, "AudioClamp", 0, winreg.REG_SZ, f'"{app_path}" --minimized')
                 else:

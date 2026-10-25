@@ -58,7 +58,11 @@ class WebviewApi:
     def set_start_with_windows(self, enabled):
         app_path = sys.executable
         if not getattr(sys, 'frozen', False):
-            app_path = os.path.abspath(sys.argv[0])
+            installed_exe = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "AudioClamp", "AudioClamp.exe")
+            if os.path.exists(installed_exe):
+                app_path = installed_exe
+            else:
+                app_path = os.path.abspath(sys.argv[0])
         self._app.config.set_start_with_windows(bool(enabled), app_path)
 
     def get_audio_processes(self):
@@ -285,6 +289,7 @@ class WebviewWindow:
                     pass
 
     def run(self, start_minimized: bool = False):
+        self.is_visible = not start_minimized
         self.window = webview.create_window(
             title="AudioClamp",
             url=INDEX_HTML,
@@ -295,6 +300,8 @@ class WebviewWindow:
             resizable=True,
             frameless=True,
             easy_drag=False,
+            hidden=start_minimized,
+            focus=not start_minimized,
             background_color="#070a12"
         )
 
