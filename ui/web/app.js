@@ -482,18 +482,42 @@ function setScope(mode) {
   if (mode === "master_device") document.getElementById("btnScopeMaster").classList.add("active");
 
   const drawer = document.getElementById("customAppDrawer");
+  const drawerTitle = document.getElementById("drawerTitle");
   if (drawer) {
     if (mode === "master_device") {
       drawer.style.display = "none";
     } else {
       drawer.style.display = "flex";
+      if (drawerTitle) {
+        drawerTitle.innerText = mode === "specific_app" ? "TARGET APPLICATION (SELECT APP TO CLAMP):" : "MONITORED GAMES (AUTO-TRIGGER APPS):";
+      }
       refreshAudioProcesses();
     }
   }
 
+  renderMonitoredChips();
+
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_scope(mode);
   }
+}
+
+function selectTargetProcess(app) {
+  if (!app) return;
+  state.target_process = app;
+
+  const input = document.getElementById("customProcessInput");
+  if (input) input.value = app;
+
+  const dropdown = document.getElementById("processDropdown");
+  if (dropdown) dropdown.value = app;
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.set_custom_process) {
+    window.pywebview.api.set_custom_process(app);
+  }
+
+  renderMonitoredChips();
+  showToast(`Target App Selected: ${app}`, "success");
 }
 
 function onAutoWatchToggle(enabled) {
@@ -528,9 +552,22 @@ function renderMonitoredChips() {
   state.monitored_apps.forEach(app => {
     const chip = document.createElement("div");
     chip.className = "monitored-chip";
-    if (state.active_target && state.active_target.toLowerCase().includes(app.toLowerCase())) {
+
+    const cleanApp = app.toLowerCase().replace(".exe", "");
+    const cleanTarget = (state.target_process || "").toLowerCase().replace(".exe", "");
+    const cleanActive = (state.active_target || "").toLowerCase().replace(".exe", "");
+
+    if (state.target_mode === "specific_app" && cleanTarget && cleanApp === cleanTarget) {
+      chip.classList.add("chip-selected");
+    }
+
+    if (cleanActive && cleanActive.includes(cleanApp)) {
       chip.classList.add("chip-active");
     }
+
+    chip.onclick = () => {
+      selectTargetProcess(app);
+    };
 
     const nameSpan = document.createElement("span");
     nameSpan.className = "chip-name";
@@ -540,7 +577,7 @@ function renderMonitoredChips() {
     const removeBtn = document.createElement("span");
     removeBtn.className = "chip-remove";
     removeBtn.innerHTML = "&times;";
-    removeBtn.title = `Remove ${app} from auto-watch`;
+    removeBtn.title = `Remove ${app} from list`;
     removeBtn.onclick = (e) => {
       e.stopPropagation();
       removeMonitoredApp(app);
@@ -562,8 +599,7 @@ async function addSelectedProcess() {
   } else {
     if (!state.monitored_apps.includes(proc)) state.monitored_apps.push(proc);
   }
-  renderMonitoredChips();
-  showToast(`Added ${proc} to auto-watch`, "success");
+  selectTargetProcess(proc);
 }
 
 async function addCustomInputProcess() {
@@ -581,8 +617,7 @@ async function addCustomInputProcess() {
     if (!state.monitored_apps.includes(proc)) state.monitored_apps.push(proc);
   }
   input.value = "";
-  renderMonitoredChips();
-  showToast(`Added ${proc} to auto-watch`, "success");
+  selectTargetProcess(proc);
 }
 
 async function removeMonitoredApp(app) {
@@ -592,7 +627,7 @@ async function removeMonitoredApp(app) {
     state.monitored_apps = state.monitored_apps.filter(x => x.toLowerCase() !== app.toLowerCase());
   }
   renderMonitoredChips();
-  showToast(`Removed ${app} from auto-watch`, "info");
+  showToast(`Removed ${app} from list`, "info");
 }
 
 async function refreshAudioProcesses() {
@@ -609,7 +644,9 @@ async function refreshAudioProcesses() {
           const opt = document.createElement("option");
           opt.value = proc;
           opt.textContent = `🎮 ${proc}`;
-          if (state.target_process && proc.toLowerCase() === state.target_process.toLowerCase()) {
+          const cleanProc = proc.toLowerCase().replace(".exe", "");
+          const cleanTarget = (state.target_process || "").toLowerCase().replace(".exe", "");
+          if (cleanTarget && cleanProc === cleanTarget) {
             opt.selected = true;
           }
           dropdown.appendChild(opt);
@@ -628,37 +665,21 @@ async function refreshAudioProcesses() {
 
 function onProcessDropdownSelect(procName) {
   if (!procName) return;
-  state.target_process = procName;
-  const input = document.getElementById("customProcessInput");
-  if (input) input.value = procName;
-  if (window.pywebview && window.pywebview.api && window.pywebview.api.set_custom_process) {
-    window.pywebview.api.set_custom_process(procName);
-  }
+  selectTargetProcess(procName);
 }
 
 function onManualProcessInput(procName) {
   const clean = procName.trim();
   if (!clean) return;
-  state.target_process = clean;
-  if (window.pywebview && window.pywebview.api && window.pywebview.api.set_custom_process) {
-    window.pywebview.api.set_custom_process(clean);
-  }
+  selectTargetProcess(clean);
 }
 
 async function browseExeFile() {
   if (window.pywebview && window.pywebview.api && window.pywebview.api.browse_for_exe) {
     const exeName = await window.pywebview.api.browse_for_exe();
     if (exeName) {
-      state.target_process = exeName;
-      const input = document.getElementById("customProcessInput");
-      if (input) input.value = exeName;
-      if (window.pywebview.api.add_monitored_app) {
-        state.monitored_apps = await window.pywebview.api.add_monitored_app(exeName);
-      }
-      renderMonitoredChips();
+      selectTargetProcess(exeName);
       await refreshAudioProcesses();
-      const dropdown = document.getElementById("processDropdown");
-      if (dropdown) dropdown.value = exeName;
     }
   }
 }

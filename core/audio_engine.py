@@ -87,8 +87,14 @@ class AudioEngine:
             self.restore_all_volumes_now()
 
     def restore_all_volumes_now(self):
+        need_uninit = False
         try:
-            CoInitializeEx(COINIT_MULTITHREADED)
+            try:
+                CoInitializeEx(COINIT_MULTITHREADED)
+                need_uninit = True
+            except OSError:
+                pass
+
             dev = AudioUtilities.GetSpeakers()
             if dev:
                 dev.EndpointVolume.SetMasterVolumeLevelScalar(self.user_target_master_vol, self.limiter_guid)
@@ -103,9 +109,14 @@ class AudioEngine:
                         s.SimpleAudioVolume.SetMasterVolume(base, None)
                     except Exception:
                         pass
-            CoUninitialize()
         except Exception as e:
             print(f"[AudioEngine] Volume restoration notice: {e}")
+        finally:
+            if need_uninit:
+                try:
+                    CoUninitialize()
+                except Exception:
+                    pass
 
     def start(self):
         if self.running:
@@ -189,9 +200,8 @@ class AudioEngine:
             return
 
         last_session_scan_time = 0.0
-        target_session = None
-        target_session_meter = None
-        target_session_vol = None
+        target_session_meters: List[Any] = []
+        target_session_vols: List[Any] = []
         target_proc_name = ""
 
         tick_interval = 0.010
@@ -222,58 +232,75 @@ class AudioEngine:
                     if target_mode in ["auto_game", "specific_app"]:
                         try:
                             sessions = AudioUtilities.GetAllSessions()
-                            found = False
+                            matched_sessions = []
+                            matched_proc_name = ""
+
                             for s in sessions:
                                 proc = s.Process
                                 if not proc:
                                     continue
-                                proc_name = proc.name()
-                                p_lower = proc_name.lower()
+                                try:
+                                    proc_name = proc.name()
+                                except Exception:
+                                    continue
+                                if not proc_name:
+                                    continue
+
+                                p_clean = proc_name.lower().removesuffix(".exe")
                                 match = False
 
                                 if target_mode == "specific_app" and specific_app:
-                                    if p_lower == specific_app.lower():
+                                    if p_clean == specific_app.lower().removesuffix(".exe"):
                                         match = True
                                 elif target_mode == "auto_game":
-                                    if p_lower in monitored_apps or any(exe.lower() == p_lower for prof in GAME_PROFILES.values() for exe in prof.get("exe_names", [])):
+                                    if any(p_clean == m.lower().removesuffix(".exe") for m in monitored_apps):
+                                        match = True
+                                    elif any(p_clean == exe.lower().removesuffix(".exe") for prof in GAME_PROFILES.values() for exe in prof.get("exe_names", [])):
                                         match = True
 
                                 if match:
-                                    target_session = s
-                                    target_session_vol = s.SimpleAudioVolume
-                                    target_proc_name = proc_name
+                                    matched_sessions.append((s, proc_name, proc.pid))
+                                    if not matched_proc_name:
+                                        matched_proc_name = proc_name
+
+                            if matched_sessions:
+                                target_session_meters = []
+                                target_session_vols = []
+                                target_proc_name = matched_proc_name
+                                for s, pname, pid in matched_sessions:
                                     try:
-                                        target_session_meter = s._ctl.QueryInterface(IAudioMeterInformationFull)
+                                        m = s._ctl.QueryInterface(IAudioMeterInformationFull)
+                                        target_session_meters.append(m)
                                     except Exception:
                                         pass
-                                    self.active_session_name = f"{proc_name}"
-                                    self.active_session_pid = proc.pid
-                                    self.is_session_mode = True
-                                    self.is_app_running = True
-                                    self.auto_watch_status = f"Active: Clamping {proc_name}"
-
-                                    if proc_name not in self.session_base_volumes:
-                                        raw_vol = target_session_vol.GetMasterVolume()
-                                        self.session_base_volumes[proc_name] = 1.0 if raw_vol < 0.20 else raw_vol
-                                    found = True
-                                    break
-
-                            if not found:
-                                # Target app closed or not running: restore volumes immediately
-                                if target_session_vol:
                                     try:
-                                        base = self.session_base_volumes.get(target_proc_name, 1.0)
-                                        target_session_vol.SetMasterVolume(base, self.limiter_guid)
+                                        v = s.SimpleAudioVolume
+                                        target_session_vols.append(v)
+                                        if pname not in self.session_base_volumes:
+                                            raw_vol = v.GetMasterVolume()
+                                            self.session_base_volumes[pname] = 1.0 if raw_vol < 0.20 else raw_vol
                                     except Exception:
                                         pass
-                                target_session = None
-                                target_session_vol = None
-                                target_session_meter = None
+
+                                self.active_session_name = f"{matched_proc_name}"
+                                self.active_session_pid = matched_sessions[0][2]
+                                self.is_session_mode = True
+                                self.is_app_running = True
+                                self.auto_watch_status = f"Active: Clamping {matched_proc_name}"
+                            else:
+                                if target_session_vols:
+                                    base = self.session_base_volumes.get(target_proc_name, 1.0)
+                                    for v in target_session_vols:
+                                        try:
+                                            v.SetMasterVolume(base, self.limiter_guid)
+                                        except Exception:
+                                            pass
+                                target_session_meters = []
+                                target_session_vols = []
                                 self.is_session_mode = False
                                 self.is_app_running = False
 
                                 if auto_watch:
-                                    # Standby mode: 100% untouched volume until game starts
                                     if vol_endpoint and self.is_limiting:
                                         vol_endpoint.SetMasterVolumeLevelScalar(self.user_target_master_vol, self.limiter_guid)
                                     self.current_attenuation_factor = 1.0
@@ -286,16 +313,15 @@ class AudioEngine:
                                         self.active_session_name = "Watching for Games (Standby)"
                                         self.auto_watch_status = "Standby: Audio at 100% (Limiter sleeps until game opens)"
                                 else:
-                                    self.active_session_name = "Master Audio (Discord Protected)"
-                                    self.auto_watch_status = "Manual Limiter Mode"
+                                    self.active_session_name = f"Master Audio ({specific_app} not running)" if target_mode == "specific_app" else "Master Audio (Discord Protected)"
+                                    self.auto_watch_status = "Fallback to Master Limiter"
                                 self.active_session_pid = None
                         except Exception:
                             self.is_session_mode = False
                             self.is_app_running = False
                     else:
-                        target_session = None
-                        target_session_vol = None
-                        target_session_meter = None
+                        target_session_meters = []
+                        target_session_vols = []
                         self.active_session_name = "Master Device (Entire PC)"
                         self.active_session_pid = None
                         self.is_session_mode = False
@@ -331,8 +357,14 @@ class AudioEngine:
                 raw_peak = 0.0
                 raw_ch_peaks = [0.0, 0.0]
                 try:
-                    if self.is_session_mode and target_session_meter:
-                        raw_peak = float(target_session_meter.GetPeakValue())
+                    if self.is_session_mode and target_session_meters:
+                        session_peaks = []
+                        for m in target_session_meters:
+                            try:
+                                session_peaks.append(float(m.GetPeakValue()))
+                            except Exception:
+                                pass
+                        raw_peak = max(session_peaks) if session_peaks else 0.0
                         raw_ch_peaks = [raw_peak, raw_peak]
                     elif master_meter:
                         raw_peak = float(master_meter.GetPeakValue())
@@ -345,9 +377,13 @@ class AudioEngine:
                 if self.config.get("stereo_linked", True) and len(raw_ch_peaks) >= 2:
                     raw_peak = max(raw_ch_peaks[0], raw_ch_peaks[1])
 
-                norm = max(0.01, self.current_attenuation_factor)
-                input_peak = min(2.0, raw_peak / norm)
-                input_ch_peaks = [min(2.0, p / norm) for p in raw_ch_peaks]
+                if self.is_session_mode:
+                    input_peak = min(2.0, raw_peak)
+                    input_ch_peaks = [min(2.0, p) for p in raw_ch_peaks]
+                else:
+                    norm = max(0.01, self.current_attenuation_factor)
+                    input_peak = min(2.0, raw_peak / norm)
+                    input_ch_peaks = [min(2.0, p / norm) for p in raw_ch_peaks]
 
                 self.latest_peak = input_peak
                 self.latest_channel_peaks = input_ch_peaks
@@ -397,20 +433,18 @@ class AudioEngine:
                 # 4. Apply Attenuation Relative to Fixed Baseline
                 try:
                     clamped_att = max(0.01, min(1.0, self.current_attenuation_factor))
-                    if self.is_session_mode and target_session_vol:
+                    if self.is_session_mode and target_session_vols:
                         base = self.session_base_volumes.get(target_proc_name, 1.0)
-                        if not enabled:
-                            target_session_vol.SetMasterVolume(base, self.limiter_guid)
-                        else:
-                            new_session_vol = max(0.01, min(1.0, base * clamped_att))
-                            target_session_vol.SetMasterVolume(new_session_vol, self.limiter_guid)
+                        new_session_vol = base if not enabled else max(0.01, min(1.0, base * clamped_att))
+                        for v in target_session_vols:
+                            try:
+                                v.SetMasterVolume(new_session_vol, self.limiter_guid)
+                            except Exception:
+                                pass
                     elif vol_endpoint:
                         base = self.user_target_master_vol
-                        if not enabled:
-                            vol_endpoint.SetMasterVolumeLevelScalar(base, self.limiter_guid)
-                        else:
-                            new_master_vol = max(0.01, min(1.0, base * clamped_att))
-                            vol_endpoint.SetMasterVolumeLevelScalar(new_master_vol, self.limiter_guid)
+                        new_master_vol = base if not enabled else max(0.01, min(1.0, base * clamped_att))
+                        vol_endpoint.SetMasterVolumeLevelScalar(new_master_vol, self.limiter_guid)
                 except Exception:
                     pass
 
@@ -442,9 +476,14 @@ class AudioEngine:
                     vol_endpoint.SetMasterVolumeLevelScalar(self.user_target_master_vol, self.limiter_guid)
                     if callback_ptr:
                         vol_endpoint.UnregisterControlChangeNotify(callback_ptr)
-                if target_session_vol:
+                if target_session_vols:
                     base = self.session_base_volumes.get(target_proc_name, 1.0)
-                    target_session_vol.SetMasterVolume(base, None)
+                    for v in target_session_vols:
+                        try:
+                            v.SetMasterVolume(base, None)
+                        except Exception:
+                            pass
             except Exception:
                 pass
+            CoUninitialize()
             CoUninitialize()

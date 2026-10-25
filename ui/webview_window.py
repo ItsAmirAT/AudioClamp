@@ -65,16 +65,27 @@ class WebviewApi:
         from pycaw.pycaw import AudioUtilities
         from comtypes import CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED
         procs = set()
+        need_uninit = False
         try:
-            CoInitializeEx(COINIT_MULTITHREADED)
+            try:
+                CoInitializeEx(COINIT_MULTITHREADED)
+                need_uninit = True
+            except OSError:
+                pass
+
             sessions = AudioUtilities.GetAllSessions()
             for s in sessions:
                 p = s.Process
                 if p and p.name():
                     procs.add(p.name())
-            CoUninitialize()
         except Exception:
             pass
+        finally:
+            if need_uninit:
+                try:
+                    CoUninitialize()
+                except Exception:
+                    pass
         return sorted(list(procs), key=lambda x: x.lower())
 
     def browse_for_exe(self):
@@ -97,8 +108,10 @@ class WebviewApi:
         return ""
 
     def set_custom_process(self, proc_name):
-        name = str(proc_name).strip()
+        name = os.path.basename(str(proc_name).strip())
         if name:
+            if not name.lower().endswith(".exe"):
+                name += ".exe"
             self._app.config.set("target_process", name)
             self._app.config.set("target_mode", "specific_app")
             self._app.engine.rescan_sessions_now()

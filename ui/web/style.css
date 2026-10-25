@@ -430,6 +430,20 @@ body {
   padding: 3px 9px;
   border-radius: 12px;
   user-select: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.monitored-chip:hover {
+  background: rgba(0, 242, 254, 0.15);
+  border-color: var(--accent-cyan);
+}
+
+.monitored-chip.chip-selected {
+  background: rgba(0, 242, 254, 0.22);
+  border-color: #00f2fe;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.45);
 }
 
 .monitored-chip.chip-active {
