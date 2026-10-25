@@ -77,10 +77,10 @@ function renderMeter(now) {
 
   ctx.clearRect(0, 0, w, h);
 
-  const padTop = 18;
-  const padBottom = 22;
-  const padLeft = 48;
-  const padRight = 86;
+  const padTop = 20;
+  const padBottom = 24;
+  const padLeft = 52;
+  const padRight = 92;
   const meterH = Math.max(10, h - padTop - padBottom);
   const availW = Math.max(10, w - padLeft - padRight);
 
@@ -102,7 +102,7 @@ function renderMeter(now) {
   const dbTicks = [0, -6, -12, -18, -24, -30, -36];
   ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
   ctx.fillStyle = "#94a3b8";
-  ctx.font = "700 11px 'Segoe UI Variable Text', -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.font = "700 13px 'Plus Jakarta Sans', sans-serif";
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
 
@@ -131,7 +131,7 @@ function renderMeter(now) {
     ctx.setLineDash([]);
 
     ctx.fillStyle = "rgba(0, 242, 254, 0.85)";
-    ctx.font = "800 9.5px 'Segoe UI Variable Text', sans-serif";
+    ctx.font = "800 11.5px 'Plus Jakarta Sans', sans-serif";
     ctx.textAlign = "left";
     ctx.fillText("DISTANCE DYNAMICS ZONE (SOFT-KNEE 4:1)", padLeft + 8, kneeBotY - 4);
   }
@@ -199,9 +199,9 @@ function renderMeter(now) {
     }
 
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "800 10px 'Segoe UI Variable Text', sans-serif";
+    ctx.font = "800 12px 'Plus Jakarta Sans', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(chNames[i] || `CH${i+1}`, bx + barW / 2, padTop + meterH + 15);
+    ctx.fillText(chNames[i] || `CH${i+1}`, bx + barW / 2, padTop + meterH + 16);
   }
 
   const threshY = Math.round(dbToY(state.threshold_db)) + 0.5;
@@ -219,8 +219,8 @@ function renderMeter(now) {
   ctx.lineTo(padLeft + availW + 2, threshY);
   ctx.stroke();
 
-  const badgeW = 96;
-  const badgeH = 22;
+  const badgeW = 118;
+  const badgeH = 26;
   const badgeX = padLeft + availW - badgeW - 6;
   const badgeY = Math.round(threshY - badgeH / 2);
 
@@ -228,7 +228,7 @@ function renderMeter(now) {
   ctx.strokeStyle = isCeilActive ? "#ff4d79" : "#ff2a5f";
   ctx.lineWidth = isCeilActive ? 2 : 1.5;
   ctx.beginPath();
-  ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 5);
+  ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
   ctx.fill();
   ctx.stroke();
 
@@ -236,7 +236,7 @@ function renderMeter(now) {
   ctx.shadowBlur = 0;
 
   ctx.fillStyle = isCeilActive ? "#ffffff" : "#ff2a5f";
-  ctx.font = "800 10.5px 'Segoe UI Variable Text', sans-serif";
+  ctx.font = "800 13px 'JetBrains Mono', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`LIMIT: ${state.threshold_db.toFixed(1)} dB`, badgeX + badgeW / 2, threshY);
@@ -252,7 +252,7 @@ function renderMeter(now) {
   // Gain Reduction Ticks on right of GR bar
   const grTicks = [0, -6, -12, -18, -24];
   ctx.fillStyle = "#64748b";
-  ctx.font = "600 8.5px 'Segoe UI Variable Text', sans-serif";
+  ctx.font = "700 10.5px 'JetBrains Mono', monospace";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   grTicks.forEach(tickDb => {
@@ -281,17 +281,18 @@ function renderMeter(now) {
   }
 
   ctx.fillStyle = "#94a3b8";
-  ctx.font = "800 9.5px 'Segoe UI Variable Text', sans-serif";
+  ctx.font = "800 11px 'Plus Jakarta Sans', sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("LIMIT GR", grX + grW / 2, padTop - 6);
 
   ctx.fillStyle = smoothGR > 0.5 ? "#ff2a5f" : "#64748b";
-  ctx.fillText(`${smoothGR > 0.1 ? `-${smoothGR.toFixed(1)}` : "0.0"} dB`, grX + grW / 2, padTop + meterH + 15);
+  ctx.font = "800 12px 'JetBrains Mono', monospace";
+  ctx.fillText(`${smoothGR > 0.1 ? `-${smoothGR.toFixed(1)}` : "0.0"} dB`, grX + grW / 2, padTop + meterH + 16);
 }
 
 function getCeilingY() {
   const rect = canvas.getBoundingClientRect();
-  const minDb = -36.0, maxDb = 0.0, padTop = 18, meterH = rect.height - padTop - 22;
+  const minDb = -36.0, maxDb = 0.0, padTop = 20, meterH = rect.height - padTop - 24;
   const clamped = Math.max(minDb, Math.min(maxDb, state.threshold_db));
   return padTop + (1.0 - (clamped - minDb) / (maxDb - minDb)) * meterH;
 }
@@ -301,8 +302,8 @@ canvas.addEventListener("mousemove", (e) => {
   const y = e.clientY - rect.top;
 
   if (isDraggingCeiling) {
-    const padTop = 18;
-    const meterH = rect.height - padTop - 22;
+    const padTop = 20;
+    const meterH = rect.height - padTop - 24;
     const norm = Math.max(0, Math.min(1, 1.0 - (y - padTop) / meterH));
     const newDb = -36.0 + norm * 36.0;
     updateCeiling(newDb);

@@ -15,6 +15,10 @@ if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
+# Stop any running instance before updating
+Get-Process -Name $AppName -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 600
+
 $TargetExe = Join-Path $InstallDir "$AppName.exe"
 Copy-Item -Path $SourceExe -Destination $TargetExe -Force
 
