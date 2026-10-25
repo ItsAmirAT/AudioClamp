@@ -75,10 +75,10 @@ function renderMeter(now) {
 
   ctx.clearRect(0, 0, w, h);
 
-  const padTop = 18;
-  const padBottom = 24;
-  const padLeft = 44;
-  const padRight = 80;
+  const padTop = 13;
+  const padBottom = 16;
+  const padLeft = 40;
+  const padRight = 78;
   const meterH = Math.max(10, h - padTop - padBottom);
   const availW = Math.max(10, w - padLeft - padRight);
 
@@ -139,8 +139,8 @@ function renderMeter(now) {
   const barW = Math.max(28, Math.floor((availW - (numCh - 1) * barGap) / numCh));
   const chNames = ["LEFT (L)", "RIGHT (R)", "CENTER", "LFE", "SURROUND L", "SURROUND R"];
 
-  const numSegments = 32;
-  const segHeight = Math.floor((meterH - (numSegments - 1) * 2) / numSegments);
+  const numSegments = 22;
+  const segHeight = Math.max(2, Math.floor((meterH - (numSegments - 1) * 2) / numSegments));
 
   for (let i = 0; i < numCh; i++) {
     const bx = padLeft + i * (barW + barGap);
@@ -198,7 +198,7 @@ function renderMeter(now) {
     ctx.fillStyle = "#94a3b8";
     ctx.font = "800 8.5px 'Segoe UI Variable Text', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(chNames[i] || `CH${i+1}`, bx + barW / 2, padTop + meterH + 15);
+    ctx.fillText(chNames[i] || `CH${i+1}`, bx + barW / 2, padTop + meterH + 12);
   }
 
   const threshY = Math.round(dbToY(state.threshold_db)) + 0.5;
