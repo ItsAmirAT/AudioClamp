@@ -140,9 +140,8 @@ class WebviewApi:
         return False
 
     def close_window(self):
-        if self._app.window:
-            self._app.window.hide()
-            self._app.tray_mgr.notify("AudioClamp is running in the background tray.", "AudioClamp")
+        self._app.hide_window()
+        self._app.tray_mgr.notify("AudioClamp is running in the background tray.", "AudioClamp")
 
     def open_donation_link(self):
         try:
@@ -158,6 +157,7 @@ class WebviewWindow:
         self.window: Optional[webview.Window] = None
         self.is_maximized = False
         self.is_exiting = False
+        self.is_visible = True
 
         self.last_telemetry_time = 0.0
         self.telemetry_interval = 0.016
@@ -172,7 +172,7 @@ class WebviewWindow:
         )
 
         self.tray_mgr = TrayIconManager(
-            on_toggle_show=self.toggle_window_visibility,
+            on_show=self.show_window,
             on_toggle_enable=self.toggle_enable,
             on_emergency_reset=self.emergency_reset,
             on_apply_preset=self.api.apply_profile,
@@ -194,14 +194,59 @@ class WebviewWindow:
         if self.window:
             self.window.evaluate_js("emergencyReset()")
 
-    def toggle_window_visibility(self):
+    def show_window(self):
         if not self.window:
             return
-        if self.window.shown:
-            self.window.hide()
-        else:
+        self.is_visible = True
+        try:
             self.window.show()
             self.window.restore()
+        except Exception:
+            pass
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+            current_pid = kernel32.GetCurrentProcessId()
+
+            hwnd_target = None
+            def enum_proc(hwnd, lParam):
+                nonlocal hwnd_target
+                pid = ctypes.c_ulong()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value == current_pid and user32.GetParent(hwnd) == 0:
+                    hwnd_target = hwnd
+                    return False
+                return True
+
+            WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+            user32.EnumWindows(WNDENUMPROC(enum_proc), 0)
+            if not hwnd_target:
+                hwnd_target = user32.FindWindowW(None, "AudioClamp")
+
+            if hwnd_target:
+                user32.ShowWindow(hwnd_target, 9)  # SW_RESTORE
+                user32.ShowWindow(hwnd_target, 5)  # SW_SHOW
+                user32.SetWindowPos(hwnd_target, -1, 0, 0, 0, 0, 0x0002 | 0x0001 | 0x0040)
+                user32.SetWindowPos(hwnd_target, -2, 0, 0, 0, 0, 0x0002 | 0x0001 | 0x0040)
+                user32.SetForegroundWindow(hwnd_target)
+        except Exception:
+            pass
+
+    def hide_window(self):
+        if not self.window:
+            return
+        self.is_visible = False
+        try:
+            self.window.hide()
+        except Exception:
+            pass
+
+    def toggle_window_visibility(self):
+        if self.is_visible:
+            self.hide_window()
+        else:
+            self.show_window()
 
     def on_full_exit(self):
         self.is_exiting = True
@@ -219,7 +264,7 @@ class WebviewWindow:
         now = time.perf_counter()
         if now - self.last_telemetry_time >= self.telemetry_interval:
             self.last_telemetry_time = now
-            if self.window and self.window.shown:
+            if self.window and self.is_visible:
                 try:
                     js_code = f"receiveTelemetry({json.dumps(data)});"
                     self.window.evaluate_js(js_code)
@@ -245,11 +290,12 @@ class WebviewWindow:
             cfg = self.config.config
             self.window.evaluate_js(f"receiveInitialConfig({json.dumps(cfg)})")
             if start_minimized:
-                self.window.hide()
+                self.hide_window()
 
         def on_closing():
             if not self.is_exiting:
-                self.window.hide()
+                self.hide_window()
+                self.tray_mgr.notify("AudioClamp is running in the background tray.", "AudioClamp")
                 return False
             return True
 

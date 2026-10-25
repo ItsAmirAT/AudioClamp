@@ -9,13 +9,13 @@ ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 
 class TrayIconManager:
     def __init__(self,
-                 on_toggle_show: Callable[[], None],
+                 on_show: Callable[[], None],
                  on_toggle_enable: Callable[[], None],
                  on_emergency_reset: Callable[[], None],
                  on_apply_preset: Callable[[str], None],
                  on_exit: Callable[[], None],
                  is_enabled_getter: Callable[[], bool]):
-        self.on_toggle_show = on_toggle_show
+        self.on_show = on_show
         self.on_toggle_enable = on_toggle_enable
         self.on_emergency_reset = on_emergency_reset
         self.on_apply_preset = on_apply_preset
@@ -35,7 +35,7 @@ class TrayIconManager:
 
     def _create_menu(self):
         return pystray.Menu(
-            item("Open AudioClamp", lambda icon, item: self.on_toggle_show(), default=True),
+            item("Open AudioClamp", lambda icon, item: self.on_show(), default=True),
             item("Limiter Active", lambda icon, item: self.on_toggle_enable(), checked=lambda item: self.is_enabled_getter()),
             pystray.Menu.SEPARATOR,
             item("Emergency Volume Reset (100%)", lambda icon, item: self.on_emergency_reset()),
