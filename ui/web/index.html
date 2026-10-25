@@ -45,8 +45,8 @@
       <button class="win-btn" onclick="minimizeWindow()" title="Minimize to Tray">
         <svg width="10" height="2" viewBox="0 0 10 2" fill="currentColor"><rect width="10" height="2" rx="1"/></svg>
       </button>
-      <button class="win-btn" onclick="toggleMaximize()" title="Maximize / Restore">
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3">
+      <button class="win-btn" id="btnMaxRestore" onclick="toggleMaximize()" title="Maximize / Restore">
+        <svg id="maxRestoreIcon" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3">
           <rect x="1.5" y="1.5" width="7" height="7" rx="1"/>
         </svg>
       </button>
@@ -171,10 +171,10 @@
         </div>
         <div class="quick-jump-row">
           <span class="quick-jump-label">QUICK CEILING PRESETS:</span>
-          <button class="quick-btn" onclick="setCeilingDb(-6)">-6 dB (Gentle)</button>
-          <button class="quick-btn" onclick="setCeilingDb(-12)">-12 dB (PUBG/FPS)</button>
-          <button class="quick-btn" onclick="setCeilingDb(-18)">-18 dB (Quiet)</button>
-          <button class="quick-btn" onclick="setCeilingDb(-24)">-24 dB (Late Night)</button>
+          <button class="quick-btn" id="btnCeil_6" data-db="-6" onclick="setCeilingDb(-6)">-6 dB (Gentle)</button>
+          <button class="quick-btn" id="btnCeil_12" data-db="-12" onclick="setCeilingDb(-12)">-12 dB (PUBG/FPS)</button>
+          <button class="quick-btn" id="btnCeil_18" data-db="-18" onclick="setCeilingDb(-18)">-18 dB (Quiet)</button>
+          <button class="quick-btn" id="btnCeil_24" data-db="-24" onclick="setCeilingDb(-24)">-24 dB (Late Night)</button>
         </div>
       </div>
     </div>
@@ -206,9 +206,9 @@
             <input type="range" id="releaseSlider" min="50" max="600" step="10" value="120">
           </div>
           <div class="release-sub-row">
-            <span>Fast (80ms)</span>
-            <span>Balanced (120ms)</span>
-            <span>Smooth (300ms)</span>
+            <span class="quick-rel-btn" onclick="setReleaseMs(80)" title="Set to 80ms (Fast)">Fast (80ms)</span>
+            <span class="quick-rel-btn" onclick="setReleaseMs(120)" title="Set to 120ms (Balanced)">Balanced (120ms)</span>
+            <span class="quick-rel-btn" onclick="setReleaseMs(300)" title="Set to 300ms (Smooth)">Smooth (300ms)</span>
           </div>
         </div>
       </div>
@@ -235,35 +235,35 @@
         <span class="profiles-sub">Instant 1-Click Calibration</span>
       </div>
       <div class="profiles-grid">
-        <div class="profile-card active" onclick="applyProfile('PUBG: BATTLEGROUNDS')">
+        <div class="profile-card active" data-profile="PUBG: BATTLEGROUNDS" onclick="applyProfile('PUBG: BATTLEGROUNDS')">
           <span class="profile-name">PUBG</span>
           <span class="profile-stats">-12 dB • 120ms</span>
         </div>
-        <div class="profile-card" onclick="applyProfile('Escape from Tarkov')">
+        <div class="profile-card" data-profile="Escape from Tarkov" onclick="applyProfile('Escape from Tarkov')">
           <span class="profile-name">Tarkov</span>
           <span class="profile-stats">-10 dB • 100ms</span>
         </div>
-        <div class="profile-card" onclick="applyProfile('Counter-Strike 2')">
+        <div class="profile-card" data-profile="Counter-Strike 2" onclick="applyProfile('Counter-Strike 2')">
           <span class="profile-name">CS2</span>
           <span class="profile-stats">-8 dB • 80ms</span>
         </div>
-        <div class="profile-card" onclick="applyProfile('Call of Duty / Warzone')">
+        <div class="profile-card" data-profile="Call of Duty / Warzone" onclick="applyProfile('Call of Duty / Warzone')">
           <span class="profile-name">Warzone</span>
           <span class="profile-stats">-14 dB • 150ms</span>
         </div>
-        <div class="profile-card" onclick="applyProfile('Valorant')">
+        <div class="profile-card" data-profile="Valorant" onclick="applyProfile('Valorant')">
           <span class="profile-name">Valorant</span>
           <span class="profile-stats">-9 dB • 90ms</span>
         </div>
-        <div class="profile-card" onclick="applyProfile('Apex Legends')">
+        <div class="profile-card" data-profile="Apex Legends" onclick="applyProfile('Apex Legends')">
           <span class="profile-name">Apex</span>
           <span class="profile-stats">-11 dB • 130ms</span>
         </div>
-        <div class="profile-card" onclick="applyProfile('Cinema / Movie Night')">
+        <div class="profile-card" data-profile="Cinema / Movie Night" onclick="applyProfile('Cinema / Movie Night')">
           <span class="profile-name">Cinema</span>
           <span class="profile-stats">-15 dB • 600ms</span>
         </div>
-        <div class="profile-card" onclick="applyProfile('Late Night (Whisper)')">
+        <div class="profile-card" data-profile="Late Night (Whisper)" onclick="applyProfile('Late Night (Whisper)')">
           <span class="profile-name">Late Night</span>
           <span class="profile-stats">-20 dB • 800ms</span>
         </div>
@@ -294,6 +294,9 @@
       <span>Reset: <kbd class="hotkey-kbd">Ctrl+Alt+R</kbd></span>
     </div>
   </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
 
   <script src="app.js"></script>
 </body>

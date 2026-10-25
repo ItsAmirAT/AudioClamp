@@ -31,6 +31,8 @@ let peakHolds = [0.0, 0.0];
 let peakHoldTimes = [0, 0];
 let smoothGR = 0.0;
 let isDraggingCeiling = false;
+let isCeilingHovered = false;
+let isMaximizedWindow = false;
 let lastRenderTime = performance.now();
 let lastTextUpdateTime = 0;
 
@@ -154,7 +156,8 @@ function renderMeter(now) {
       peakHolds[i] = targetVal;
       peakHoldTimes[i] = now;
     } else if (now - (peakHoldTimes[i] || 0) > 1200) {
-      peakHolds[i] = Math.max(0.0, peakHolds[i] - 0.02);
+      const decay = 0.6 * dt;
+      peakHolds[i] = Math.max(0.0, peakHolds[i] - decay);
     }
 
     ctx.fillStyle = "rgba(10, 15, 26, 0.9)";
@@ -202,39 +205,66 @@ function renderMeter(now) {
   }
 
   const threshY = Math.round(dbToY(state.threshold_db)) + 0.5;
-  ctx.strokeStyle = "#ff2a5f";
-  ctx.lineWidth = 2;
+  const isCeilActive = isDraggingCeiling || isCeilingHovered;
+
+  if (isCeilActive) {
+    ctx.shadowColor = "#ff2a5f";
+    ctx.shadowBlur = 8;
+  }
+
+  ctx.strokeStyle = isCeilActive ? "#ff4d79" : "#ff2a5f";
+  ctx.lineWidth = isCeilActive ? 2.5 : 2;
   ctx.beginPath();
   ctx.moveTo(padLeft - 2, threshY);
   ctx.lineTo(padLeft + availW + 2, threshY);
   ctx.stroke();
 
-  const badgeW = 94;
+  const badgeW = 96;
   const badgeH = 22;
   const badgeX = padLeft + availW - badgeW - 6;
   const badgeY = Math.round(threshY - badgeH / 2);
 
-  ctx.fillStyle = "rgba(14, 20, 36, 0.96)";
-  ctx.strokeStyle = "#ff2a5f";
-  ctx.lineWidth = 1.5;
+  ctx.fillStyle = isCeilActive ? "rgba(22, 28, 48, 0.98)" : "rgba(14, 20, 36, 0.96)";
+  ctx.strokeStyle = isCeilActive ? "#ff4d79" : "#ff2a5f";
+  ctx.lineWidth = isCeilActive ? 2 : 1.5;
   ctx.beginPath();
   ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 5);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#ff2a5f";
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = isCeilActive ? "#ffffff" : "#ff2a5f";
   ctx.font = "800 10.5px 'Segoe UI Variable Text', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`LIMIT: ${state.threshold_db.toFixed(1)} dB`, badgeX + badgeW / 2, threshY);
 
   const grX = padLeft + availW + 16;
-  const grW = 22;
+  const grW = 20;
 
   ctx.fillStyle = "#090d18";
   ctx.fillRect(grX, padTop, grW, meterH);
   ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
   ctx.strokeRect(grX, padTop, grW, meterH);
+
+  // Gain Reduction Ticks on right of GR bar
+  const grTicks = [0, -6, -12, -18, -24];
+  ctx.fillStyle = "#64748b";
+  ctx.font = "600 8.5px 'Segoe UI Variable Text', sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  grTicks.forEach(tickDb => {
+    const norm = Math.abs(tickDb) / 30.0;
+    const ty = Math.round(padTop + norm * meterH) + 0.5;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.beginPath();
+    ctx.moveTo(grX + grW, ty);
+    ctx.lineTo(grX + grW + 3, ty);
+    ctx.stroke();
+    ctx.fillText(`${tickDb}`, grX + grW + 5, ty);
+  });
 
   const grAlpha = 1.0 - Math.exp(-dt / 0.06);
   smoothGR = smoothGR + (Math.abs(state.gain_reduction_db) - smoothGR) * grAlpha;
@@ -259,34 +289,108 @@ function renderMeter(now) {
   ctx.fillText(`${smoothGR > 0.1 ? `-${smoothGR.toFixed(1)}` : "0.0"} dB`, grX + grW / 2, padTop + meterH + 15);
 }
 
-canvas.addEventListener("mousedown", (e) => {
+function getCeilingY() {
+  const rect = canvas.getBoundingClientRect();
+  const minDb = -36.0, maxDb = 0.0, padTop = 18, meterH = rect.height - padTop - 22;
+  const clamped = Math.max(minDb, Math.min(maxDb, state.threshold_db));
+  return padTop + (1.0 - (clamped - minDb) / (maxDb - minDb)) * meterH;
+}
+
+canvas.addEventListener("mousemove", (e) => {
   const rect = canvas.getBoundingClientRect();
   const y = e.clientY - rect.top;
-  const threshY = (function() {
-    const minDb = -36.0, maxDb = 0.0, padTop = 18, meterH = rect.height - padTop - 22;
-    const clamped = Math.max(minDb, Math.min(maxDb, state.threshold_db));
-    return padTop + (1.0 - (clamped - minDb) / (maxDb - minDb)) * meterH;
-  })();
 
+  if (isDraggingCeiling) {
+    const padTop = 18;
+    const meterH = rect.height - padTop - 22;
+    const norm = Math.max(0, Math.min(1, 1.0 - (y - padTop) / meterH));
+    const newDb = -36.0 + norm * 36.0;
+    updateCeiling(newDb);
+    canvas.style.cursor = "grabbing";
+    return;
+  }
+
+  const threshY = getCeilingY();
   if (Math.abs(y - threshY) < 14) {
-    isDraggingCeiling = true;
+    isCeilingHovered = true;
+    canvas.style.cursor = "ns-resize";
+  } else {
+    if (isCeilingHovered) {
+      isCeilingHovered = false;
+      canvas.style.cursor = "default";
+    }
   }
 });
 
-window.addEventListener("mousemove", (e) => {
-  if (!isDraggingCeiling) return;
+canvas.addEventListener("mousedown", (e) => {
   const rect = canvas.getBoundingClientRect();
   const y = e.clientY - rect.top;
-  const padTop = 18;
-  const meterH = rect.height - padTop - 22;
-  const norm = Math.max(0, Math.min(1, 1.0 - (y - padTop) / meterH));
-  const newDb = -36.0 + norm * 36.0;
-  updateCeiling(newDb);
+  const threshY = getCeilingY();
+
+  if (Math.abs(y - threshY) < 16) {
+    isDraggingCeiling = true;
+    isCeilingHovered = true;
+    canvas.style.cursor = "grabbing";
+  }
+});
+
+canvas.addEventListener("mouseleave", () => {
+  if (!isDraggingCeiling) {
+    isCeilingHovered = false;
+    canvas.style.cursor = "default";
+  }
 });
 
 window.addEventListener("mouseup", () => {
-  isDraggingCeiling = false;
+  if (isDraggingCeiling) {
+    isDraggingCeiling = false;
+    canvas.style.cursor = isCeilingHovered ? "ns-resize" : "default";
+  }
 });
+
+function showToast(message, type = "info") {
+  const container = document.getElementById("toastContainer");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  let icon = "⚡";
+  if (type === "warning") icon = "⚠️";
+  if (type === "success") icon = "🛡️";
+
+  toast.innerHTML = `<span style="font-size: 14px;">${icon}</span><span>${message}</span>`;
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.classList.add("show");
+  });
+
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 300);
+  }, 2200);
+}
+
+function updateQuickCeilingButtons(db) {
+  const btns = [
+    { id: "btnCeil_6", val: -6 },
+    { id: "btnCeil_12", val: -12 },
+    { id: "btnCeil_18", val: -18 },
+    { id: "btnCeil_24", val: -24 }
+  ];
+  btns.forEach(b => {
+    const el = document.getElementById(b.id);
+    if (el) {
+      if (Math.abs(db - b.val) < 0.3) {
+        el.classList.add("active");
+      } else {
+        el.classList.remove("active");
+      }
+    }
+  });
+}
 
 function updateSliderTrack(slider, color) {
   const min = parseFloat(slider.min);
@@ -306,6 +410,7 @@ function updateCeiling(db) {
   updateSliderTrack(slider, "#ff2a5f");
 
   document.getElementById("ceilingReadout").innerText = `${state.threshold_db.toFixed(1)} dBFS (${pct.toFixed(0)}%)`;
+  updateQuickCeilingButtons(state.threshold_db);
 
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_threshold(state.threshold_db);
@@ -314,6 +419,20 @@ function updateCeiling(db) {
 
 function setCeilingDb(db) {
   updateCeiling(db);
+}
+
+function setReleaseMs(ms) {
+  const val = parseInt(ms);
+  state.release_ms = val;
+  const slider = document.getElementById("releaseSlider");
+  if (slider) slider.value = val;
+  document.getElementById("releaseNum").innerText = `${val} ms`;
+  updateSliderTrack(slider, "#00f2fe");
+
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.set_release_ms(val);
+  }
+  showToast(`Footstep Recovery: ${val} ms`, "info");
 }
 
 document.getElementById("ceilingSlider").addEventListener("input", (e) => {
@@ -444,6 +563,7 @@ async function addSelectedProcess() {
     if (!state.monitored_apps.includes(proc)) state.monitored_apps.push(proc);
   }
   renderMonitoredChips();
+  showToast(`Added ${proc} to auto-watch`, "success");
 }
 
 async function addCustomInputProcess() {
@@ -462,6 +582,7 @@ async function addCustomInputProcess() {
   }
   input.value = "";
   renderMonitoredChips();
+  showToast(`Added ${proc} to auto-watch`, "success");
 }
 
 async function removeMonitoredApp(app) {
@@ -471,6 +592,7 @@ async function removeMonitoredApp(app) {
     state.monitored_apps = state.monitored_apps.filter(x => x.toLowerCase() !== app.toLowerCase());
   }
   renderMonitoredChips();
+  showToast(`Removed ${app} from auto-watch`, "info");
 }
 
 async function refreshAudioProcesses() {
@@ -541,12 +663,23 @@ async function browseExeFile() {
   }
 }
 
-function applyProfile(profileName) {
+function highlightProfileCard(profileName) {
   state.active_profile = profileName;
-  document.querySelectorAll(".profile-card").forEach(c => c.classList.remove("active"));
-  if (event && event.currentTarget) {
-    event.currentTarget.classList.add("active");
-  }
+  const clean = (profileName || "").toLowerCase();
+  document.querySelectorAll(".profile-card").forEach(card => {
+    const p = (card.getAttribute("data-profile") || "").toLowerCase();
+    const name = (card.querySelector(".profile-name")?.textContent || "").toLowerCase();
+    if (p === clean || clean.includes(name) || (p && clean.includes(p))) {
+      card.classList.add("active");
+    } else {
+      card.classList.remove("active");
+    }
+  });
+}
+
+function applyProfile(profileName) {
+  highlightProfileCard(profileName);
+  showToast(`Loaded Profile: ${profileName}`, "success");
 
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.apply_profile(profileName);
@@ -555,6 +688,7 @@ function applyProfile(profileName) {
 
 function emergencyReset() {
   updateCeiling(0.0);
+  showToast("Emergency Reset: Volume Ceiling set to 100% (0 dBFS)", "warning");
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.emergency_reset();
   }
@@ -564,8 +698,22 @@ function minimizeWindow() {
   if (window.pywebview && window.pywebview.api) window.pywebview.api.minimize_window();
 }
 
-function toggleMaximize() {
-  if (window.pywebview && window.pywebview.api) window.pywebview.api.toggle_maximize();
+function updateMaximizeIcon(isMax) {
+  isMaximizedWindow = isMax;
+  const icon = document.getElementById("maxRestoreIcon");
+  if (!icon) return;
+  if (isMax) {
+    icon.innerHTML = '<rect x="3" y="1" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="1" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>';
+  } else {
+    icon.innerHTML = '<rect x="1.5" y="1.5" width="7" height="7" rx="1"/>';
+  }
+}
+
+async function toggleMaximize() {
+  if (window.pywebview && window.pywebview.api) {
+    const isMax = await window.pywebview.api.toggle_maximize();
+    updateMaximizeIcon(isMax);
+  }
 }
 
 function closeWindow() {
@@ -703,6 +851,10 @@ window.receiveInitialConfig = function(cfg) {
   const pInput = document.getElementById("customProcessInput");
   if (pInput) pInput.value = state.target_process;
 
+  state.active_profile = cfg.selected_profile || "PUBG: BATTLEGROUNDS";
+  highlightProfileCard(state.active_profile);
+  updateQuickCeilingButtons(state.threshold_db);
+
   renderMonitoredChips();
   setScope(state.target_mode);
 };
@@ -714,6 +866,13 @@ function initWindowDrag() {
   let isDragging = false;
   let startX = 0;
   let startY = 0;
+
+  titlebar.addEventListener("dblclick", (e) => {
+    if (e.target.closest(".titlebar-controls") || e.target.closest("button") || e.target.closest("input")) {
+      return;
+    }
+    toggleMaximize();
+  });
 
   titlebar.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
@@ -758,11 +917,21 @@ window.addEventListener("DOMContentLoaded", () => {
   initWindowDrag();
   updateSliderTrack(document.getElementById("ceilingSlider"), "#ff2a5f");
   updateSliderTrack(document.getElementById("releaseSlider"), "#00f2fe");
+  updateQuickCeilingButtons(state.threshold_db);
 
   const dropdown = document.getElementById("processDropdown");
   if (dropdown) {
     dropdown.addEventListener("change", (e) => {
       onProcessDropdownSelect(e.target.value);
+    });
+  }
+
+  const customInput = document.getElementById("customProcessInput");
+  if (customInput) {
+    customInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        addCustomInputProcess();
+      }
     });
   }
 });

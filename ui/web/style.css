@@ -161,11 +161,29 @@ body {
 /* Main Container — Spacious, Zero-Scroll Viewport */
 .main-content {
   flex: 1;
-  padding: 10px 16px;
+  padding: 8px 16px;
   display: flex;
   flex-direction: column;
   gap: 7px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.main-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.main-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.main-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 242, 254, 0.2);
+  border-radius: 4px;
+}
+
+.main-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 242, 254, 0.5);
 }
 
 /* Cards */
@@ -756,6 +774,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.quick-btn.active {
+  background: rgba(255, 42, 95, 0.18);
+  border-color: rgba(255, 42, 95, 0.6);
+  color: #ff2a5f;
+  box-shadow: 0 0 8px rgba(255, 42, 95, 0.3);
+}
+
 /* Dynamics Card */
 .dynamics-card {
   padding: 8px 14px;
@@ -823,6 +848,19 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-size: 8.5px;
   color: var(--text-subtle);
   font-weight: 600;
+}
+
+.quick-rel-btn {
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.quick-rel-btn:hover {
+  color: var(--accent-cyan);
+  background: rgba(0, 242, 254, 0.12);
 }
 
 /* In-App Donation Banner Card */
@@ -1057,4 +1095,50 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-radius: 3px;
   font-family: monospace;
   font-size: 10px;
+}
+
+/* Toast Notifications */
+.toast-container {
+  position: fixed;
+  bottom: 50px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast {
+  background: rgba(14, 20, 36, 0.96);
+  border: 1px solid var(--accent-cyan);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 12px var(--accent-cyan-glow);
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.toast.toast-warning {
+  border-color: var(--accent-crimson);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 12px var(--accent-crimson-glow);
+}
+
+.toast.toast-success {
+  border-color: var(--accent-emerald);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 12px var(--accent-emerald-glow);
 }
