@@ -68,6 +68,13 @@ class TrayIconManager:
             self.tray_icon.icon = self.icon_active if is_enabled else self.icon_inactive
             self.tray_icon.title = f"AudioClamp - {'Active' if is_enabled else 'Bypassed'}"
 
+    def notify(self, message: str, title: str = "AudioClamp"):
+        if self.tray_icon:
+            try:
+                self.tray_icon.notify(message, title)
+            except Exception:
+                pass
+
     def stop(self):
         if self.tray_icon:
             try:

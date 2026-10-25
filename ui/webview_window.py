@@ -140,7 +140,9 @@ class WebviewApi:
         return False
 
     def close_window(self):
-        self._app.on_full_exit()
+        if self._app.window:
+            self._app.window.hide()
+            self._app.tray_mgr.notify("AudioClamp is running in the background tray.", "AudioClamp")
 
     def open_donation_link(self):
         try:
@@ -155,6 +157,7 @@ class WebviewWindow:
         self.api = WebviewApi(self)
         self.window: Optional[webview.Window] = None
         self.is_maximized = False
+        self.is_exiting = False
 
         self.last_telemetry_time = 0.0
         self.telemetry_interval = 0.016
@@ -201,6 +204,7 @@ class WebviewWindow:
             self.window.restore()
 
     def on_full_exit(self):
+        self.is_exiting = True
         self.engine.stop()
         self.hotkey_mgr.unregister_hotkeys()
         self.tray_mgr.stop()
@@ -243,5 +247,12 @@ class WebviewWindow:
             if start_minimized:
                 self.window.hide()
 
+        def on_closing():
+            if not self.is_exiting:
+                self.window.hide()
+                return False
+            return True
+
         self.window.events.loaded += on_loaded
+        self.window.events.closing += on_closing
         webview.start(debug=False)
