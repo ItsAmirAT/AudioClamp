@@ -66,7 +66,7 @@ Your support helps fund continuous updates, new game calibration profiles, and d
 ### Setup
 ```bash
 # Clone the repository
-git clone git@github.com:ItsAmirAT/AudioClamp.git
+git clone git@github.com:ItsSpero/AudioClamp.git
 cd AudioClamp
 
 # Install dependencies
