@@ -287,6 +287,38 @@ body {
   color: var(--text-muted);
 }
 
+/* Auto-Watch Mode Toggle */
+.auto-watch-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  background: rgba(0, 242, 254, 0.08);
+  border: 1px solid rgba(0, 242, 254, 0.28);
+  border-radius: 6px;
+  padding: 4px 10px;
+  transition: all 0.2s ease;
+}
+
+.auto-watch-box:hover {
+  background: rgba(0, 242, 254, 0.16);
+  border-color: rgba(0, 242, 254, 0.5);
+}
+
+.auto-watch-box input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent-cyan);
+  width: 13px;
+  height: 13px;
+}
+
+.auto-watch-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  white-space: nowrap;
+}
+
 /* Scope Selector Tabs */
 .scope-pills {
   display: flex;
@@ -362,6 +394,83 @@ body {
 .btn-refresh-procs:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
+}
+
+/* Monitored App Chips */
+.monitored-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 70px;
+  overflow-y: auto;
+  padding: 3px 1px;
+}
+
+.monitored-chips-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.monitored-chips-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 242, 254, 0.25);
+  border-radius: 3px;
+}
+
+.monitored-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(14, 25, 45, 0.9);
+  border: 1px solid rgba(0, 242, 254, 0.35);
+  color: #e2e8f0;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 12px;
+  user-select: none;
+}
+
+.monitored-chip.chip-active {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #a7f3d0;
+}
+
+.monitored-chip .chip-name {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitored-chip .chip-remove {
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.monitored-chip .chip-remove:hover {
+  color: var(--accent-crimson);
+}
+
+.btn-add-app {
+  background: rgba(0, 242, 254, 0.12);
+  border: 1px solid rgba(0, 242, 254, 0.35);
+  color: var(--accent-cyan);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-add-app:hover {
+  background: var(--accent-cyan);
+  color: #070a12;
 }
 
 .drawer-controls {
@@ -445,6 +554,26 @@ body {
   color: var(--accent-cyan);
   font-size: 7px;
   text-shadow: 0 0 6px var(--accent-cyan);
+}
+
+.banner-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.auto-status-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(0, 242, 254, 0.15);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(0, 242, 254, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
 }
 
 .discord-safe-badge {
@@ -706,6 +835,74 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-weight: 600;
 }
 
+/* In-App Donation Banner Card */
+.donate-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(255, 94, 91, 0.08) 0%, rgba(14, 20, 36, 0.95) 100%);
+  border: 1px solid rgba(255, 94, 91, 0.32);
+  box-shadow: 0 2px 14px rgba(255, 94, 91, 0.1);
+}
+
+.donate-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.donate-cup-icon {
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 0 8px rgba(255, 94, 91, 0.45));
+}
+
+.donate-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.donate-title {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+}
+
+.donate-desc {
+  font-size: 9.5px;
+  color: #cbd5e1;
+}
+
+.btn-donate-card {
+  background: linear-gradient(135deg, #ff5e5b 0%, #ff2a5f 100%);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  box-shadow: 0 0 12px rgba(255, 94, 91, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-donate-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px rgba(255, 94, 91, 0.65);
+  filter: brightness(1.1);
+}
+
+.btn-donate-card:active {
+  transform: translateY(0);
+}
+
 /* Profiles Grid */
 .profiles-card {
   padding: 8px 12px;
@@ -807,6 +1004,30 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .footer-center {
   display: flex;
   align-items: center;
+  gap: 12px;
+}
+
+.autostart-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+  transition: color 0.15s ease;
+}
+
+.autostart-toggle input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent-cyan);
+  width: 13px;
+  height: 13px;
+}
+
+.autostart-toggle:hover {
+  color: #ffffff;
 }
 
 .btn-kofi {

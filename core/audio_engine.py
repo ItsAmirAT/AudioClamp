@@ -56,6 +56,8 @@ class AudioEngine:
         self.active_session_name: str = "Master Audio (Global)"
         self.active_session_pid: Optional[int] = None
         self.is_session_mode: bool = False
+        self.is_app_running: bool = False
+        self.auto_watch_status: str = "Standby"
 
         self.current_attenuation_factor: float = 1.0
         self.gain_reduction_db: float = 0.0
@@ -210,8 +212,11 @@ class AudioEngine:
                 ratio = float(self.config.get("compression_ratio", 4.0))
                 release_ms = max(40.0, float(self.config.get("release_ms", 120.0)))
 
+                auto_watch = self.config.get("auto_watch_mode", True)
+                monitored_apps = [m.lower() for m in self.config.get("monitored_apps", [])]
+
                 # 1. Periodic session scanner
-                if (now - last_session_scan_time > 1.5) or self._force_rescan:
+                if (now - last_session_scan_time > 1.0) or self._force_rescan:
                     self._force_rescan = False
                     last_session_scan_time = now
                     if target_mode in ["auto_game", "specific_app"]:
@@ -223,16 +228,15 @@ class AudioEngine:
                                 if not proc:
                                     continue
                                 proc_name = proc.name()
+                                p_lower = proc_name.lower()
                                 match = False
 
                                 if target_mode == "specific_app" and specific_app:
-                                    if proc_name.lower() == specific_app.lower():
+                                    if p_lower == specific_app.lower():
                                         match = True
                                 elif target_mode == "auto_game":
-                                    for prof_name, prof_data in GAME_PROFILES.items():
-                                        if any(exe.lower() == proc_name.lower() for exe in prof_data.get("exe_names", [])):
-                                            match = True
-                                            break
+                                    if p_lower in monitored_apps or any(exe.lower() == p_lower for prof in GAME_PROFILES.values() for exe in prof.get("exe_names", [])):
+                                        match = True
 
                                 if match:
                                     target_session = s
@@ -242,9 +246,11 @@ class AudioEngine:
                                         target_session_meter = s._ctl.QueryInterface(IAudioMeterInformationFull)
                                     except Exception:
                                         pass
-                                    self.active_session_name = f"{proc_name} (PID {proc.pid})"
+                                    self.active_session_name = f"{proc_name}"
                                     self.active_session_pid = proc.pid
                                     self.is_session_mode = True
+                                    self.is_app_running = True
+                                    self.auto_watch_status = f"Active: Clamping {proc_name}"
 
                                     if proc_name not in self.session_base_volumes:
                                         raw_vol = target_session_vol.GetMasterVolume()
@@ -253,6 +259,7 @@ class AudioEngine:
                                     break
 
                             if not found:
+                                # Target app closed or not running: restore volumes immediately
                                 if target_session_vol:
                                     try:
                                         base = self.session_base_volumes.get(target_proc_name, 1.0)
@@ -262,14 +269,29 @@ class AudioEngine:
                                 target_session = None
                                 target_session_vol = None
                                 target_session_meter = None
-                                if target_mode == "specific_app":
-                                    self.active_session_name = f"Waiting for {specific_app}..." if specific_app else "No Process Selected"
+                                self.is_session_mode = False
+                                self.is_app_running = False
+
+                                if auto_watch:
+                                    # Standby mode: 100% untouched volume until game starts
+                                    if vol_endpoint and self.is_limiting:
+                                        vol_endpoint.SetMasterVolumeLevelScalar(self.user_target_master_vol, self.limiter_guid)
+                                    self.current_attenuation_factor = 1.0
+                                    self.gain_reduction_db = 0.0
+                                    self.is_limiting = False
+                                    if target_mode == "specific_app":
+                                        self.active_session_name = f"Waiting for {specific_app}..." if specific_app else "No Process Selected"
+                                        self.auto_watch_status = f"Standby: Waiting for {specific_app}" if specific_app else "Select an app below"
+                                    else:
+                                        self.active_session_name = "Watching for Games (Standby)"
+                                        self.auto_watch_status = "Standby: Audio at 100% (Limiter sleeps until game opens)"
                                 else:
                                     self.active_session_name = "Master Audio (Discord Protected)"
+                                    self.auto_watch_status = "Manual Limiter Mode"
                                 self.active_session_pid = None
-                                self.is_session_mode = False
                         except Exception:
                             self.is_session_mode = False
+                            self.is_app_running = False
                     else:
                         target_session = None
                         target_session_vol = None
@@ -277,6 +299,33 @@ class AudioEngine:
                         self.active_session_name = "Master Device (Entire PC)"
                         self.active_session_pid = None
                         self.is_session_mode = False
+                        self.is_app_running = True
+                        self.auto_watch_status = "Active: Entire PC"
+
+                # 2. Read Peak Level & Dynamic Limiting
+                # In auto_watch mode, if no target game is running, sleep without attenuating
+                if auto_watch and target_mode in ["auto_game", "specific_app"] and not self.is_app_running:
+                    self.latest_peak = 0.0
+                    self.latest_channel_peaks = [0.0, 0.0]
+                    self.gain_reduction_db = 0.0
+                    self.is_limiting = False
+                    if self.telemetry_callback:
+                        data = {
+                            "peak": 0.0,
+                            "channel_peaks": [0.0, 0.0],
+                            "gain_reduction_db": 0.0,
+                            "active_target": self.active_session_name,
+                            "is_game_isolated": False,
+                            "is_limiting": False,
+                            "is_app_running": False,
+                            "auto_watch_status": self.auto_watch_status
+                        }
+                        try:
+                            self.telemetry_callback(data)
+                        except Exception:
+                            pass
+                    time.sleep(tick_interval)
+                    continue
 
                 # 2. Read Peak Level
                 raw_peak = 0.0
@@ -374,6 +423,8 @@ class AudioEngine:
                         "active_target": self.active_session_name,
                         "is_game_isolated": self.is_session_mode,
                         "is_limiting": self.is_limiting,
+                        "is_app_running": self.is_app_running,
+                        "auto_watch_status": self.auto_watch_status
                     }
                     try:
                         self.telemetry_callback(data)

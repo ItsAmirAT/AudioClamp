@@ -22,6 +22,8 @@ Your support helps fund continuous updates, new game calibration profiles, and d
 
 ## ✨ Features
 
+- **Auto-Game Watcher Service**: Automatically detects when games launch. While on desktop or web browsing, AudioClamp stays in a zero-overhead standby mode leaving system volume 100% raw. When a monitored game opens, clamping engages instantly; when the game exits, volume is seamlessly restored to 100%.
+- **Custom Game & App Management**: Add or remove any application or `.exe` with 1 click via interactive process scanning or file browser.
 - **Per-Application Audio Limiting**: Lock the limiter to specific games (e.g. `TslGame.exe`, `cs2.exe`, `EscapeFromTarkov.exe`). Discord, TeamSpeak, and music players remain untouched at full volume.
 - **Stereo-Linked Balance (HRTF Safe)**: Both stereo channels share unified peak detection. Directional spatial audio cues and stereo panning remain 100% accurate.
 - **Soft-Knee Distance Preservation**: A gradual 4:1 compression curve prevents close shots and distant sniper fire from clamping to the exact same loudness, preserving distance judgment.

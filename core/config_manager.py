@@ -100,8 +100,21 @@ GAME_PROFILES: Dict[str, Dict[str, Any]] = {
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "enabled": True,
+    "auto_watch_mode": True,
     "target_mode": "auto_game",
     "target_process": "",
+    "monitored_apps": [
+        "TslGame.exe",
+        "EscapeFromTarkov.exe",
+        "EscapeFromTarkov_BE.exe",
+        "cs2.exe",
+        "cod.exe",
+        "bootstrapper.exe",
+        "VALORANT-Win64-Shipping.exe",
+        "Valorant.exe",
+        "r5apex.exe",
+        "r5apex_dx12.exe"
+    ],
     "threshold_db": -12.0,
     "threshold_percent": 50.0,
     "knee_mode": "soft_knee",
@@ -164,6 +177,21 @@ class ConfigManager:
             self.config["stereo_linked"] = p["stereo_linked"]
             self.config["selected_profile"] = profile_name
             self.save_config()
+
+    def add_monitored_app(self, exe_name: str):
+        clean = os.path.basename(str(exe_name).strip())
+        if clean:
+            apps = list(self.config.get("monitored_apps", []))
+            if not any(a.lower() == clean.lower() for a in apps):
+                apps.append(clean)
+                self.config["monitored_apps"] = apps
+                self.save_config()
+
+    def remove_monitored_app(self, exe_name: str):
+        clean = str(exe_name).strip().lower()
+        apps = [a for a in self.config.get("monitored_apps", []) if a.lower() != clean]
+        self.config["monitored_apps"] = apps
+        self.save_config()
 
     def save_recovery_state(self, target_type: str, target_name: str, original_volume: float):
         try:

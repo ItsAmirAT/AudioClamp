@@ -38,7 +38,7 @@
     </div>
 
     <div class="titlebar-controls" onmousedown="event.stopPropagation();">
-      <!-- Ko-fi Support Button -->
+      <!-- Ko-fi Support Button in Titlebar -->
       <button class="btn-donate-top" onclick="openDonationLink()" title="Support development on Ko-fi">
         ☕ Support
       </button>
@@ -77,8 +77,14 @@
               <span class="status-indicator-dot" id="powerDot"></span>
               <span class="power-status-text" id="powerStatusText">LIMITER ACTIVE</span>
             </div>
-            <span class="power-status-sub">Zero-Ducking Audio Ceiling Active</span>
+            <span class="power-status-sub" id="powerStatusSub">Zero-Ducking Audio Ceiling Active</span>
           </div>
+        </label>
+
+        <!-- Auto-Watch Mode Switch -->
+        <label class="auto-watch-box" title="Auto-starts limiter when game opens; auto-stops and restores audio to 100% when game closes">
+          <input type="checkbox" id="autoWatchSwitch" checked onchange="onAutoWatchToggle(this.checked)">
+          <span class="auto-watch-label">⚡ Auto-Game Watcher</span>
         </label>
 
         <!-- Scope Pills -->
@@ -89,32 +95,43 @@
         </div>
       </div>
 
-      <!-- Custom App Drawer -->
-      <div class="custom-app-drawer" id="customAppDrawer" style="display: none;">
+      <!-- Monitored Apps / Background Watcher Drawer -->
+      <div class="custom-app-drawer" id="customAppDrawer">
         <div class="drawer-header">
-          <span class="drawer-title">TARGET GAME / APPLICATION:</span>
+          <span class="drawer-title">MONITORED GAMES (AUTO-TRIGGER APPS):</span>
           <button class="btn-refresh-procs" onclick="refreshAudioProcesses()" title="Refresh Running Audio Apps">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            Refresh List
+            Scan Running
           </button>
         </div>
+
+        <!-- Chips of actively monitored apps -->
+        <div class="monitored-chips-list" id="monitoredChipsList">
+          <!-- Dynamically populated -->
+        </div>
+
         <div class="drawer-controls">
-          <select id="processDropdown" class="proc-select" onchange="onProcessDropdownSelect(this.value)">
-            <option value="">-- Select Active Game / Audio Process --</option>
+          <select id="processDropdown" class="proc-select">
+            <option value="">-- Select Running Game / Process --</option>
           </select>
+          <button class="btn-add-app" onclick="addSelectedProcess()">+ Add App</button>
           <span class="drawer-or">OR</span>
-          <input type="text" id="customProcessInput" class="proc-input" placeholder="Type exe name (e.g. cs2.exe)" onchange="onManualProcessInput(this.value)">
-          <button class="btn-browse-exe" onclick="browseExeFile()" title="Browse for executable on PC">📁 Browse .exe</button>
+          <input type="text" id="customProcessInput" class="proc-input" placeholder="e.g. cs2.exe">
+          <button class="btn-add-app" onclick="addCustomInputProcess()">+ Add</button>
+          <button class="btn-browse-exe" onclick="browseExeFile()" title="Browse for executable on PC">📁 Browse</button>
         </div>
       </div>
 
       <!-- Target Status Banner -->
       <div class="target-banner">
         <div class="target-info">
-          <span class="target-bullet">●</span>
-          <span id="targetBannerText">Target: Master Audio</span>
+          <span class="target-bullet" id="targetBullet">●</span>
+          <span id="targetBannerText">Target: Watching for Games</span>
         </div>
-        <span class="discord-safe-badge" id="discordBadge">🛡️ Discord Safe</span>
+        <div class="banner-badges">
+          <span class="auto-status-badge" id="autoStatusBadge">⚡ Auto-Watch: Standby</span>
+          <span class="discord-safe-badge" id="discordBadge">🛡️ Discord Safe</span>
+        </div>
       </div>
     </div>
 
@@ -197,6 +214,20 @@
       </div>
     </div>
 
+    <!-- In-App Donation Banner Card -->
+    <div class="card donate-card">
+      <div class="donate-card-left">
+        <div class="donate-cup-icon">☕</div>
+        <div class="donate-info-col">
+          <span class="donate-title">Support AudioClamp Development</span>
+          <span class="donate-desc">Free & Open-Source. Support future esports calibrations, profiles & updates!</span>
+        </div>
+      </div>
+      <button class="btn-donate-card" onclick="openDonationLink()" title="Open Ko-fi support page">
+        💖 Donate on Ko-fi
+      </button>
+    </div>
+
     <!-- Quick Profiles Grid -->
     <div class="card profiles-card">
       <div class="profiles-header">
@@ -247,9 +278,13 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
         <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
       </svg>
-      Emergency Volume Reset
+      Emergency Reset
     </button>
     <div class="footer-center">
+      <label class="autostart-toggle" title="Run AudioClamp silently in the background tray when Windows boots">
+        <input type="checkbox" id="autoStartSwitch" onchange="toggleAutoStart(this.checked)">
+        <span>Run on Windows Boot</span>
+      </label>
       <button class="btn-kofi" onclick="openDonationLink()" title="Support the developer on Ko-fi">
         ☕ Buy Me a Coffee
       </button>

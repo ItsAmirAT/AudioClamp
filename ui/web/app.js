@@ -1,5 +1,6 @@
 let state = {
   enabled: true,
+  auto_watch_mode: true,
   target_mode: "auto_game",
   threshold_db: -12.0,
   threshold_percent: 50.0,
@@ -13,7 +14,11 @@ let state = {
   channel_peaks: [0.0, 0.0],
   gain_reduction_db: 0.0,
   applied_vol: 0.5,
-  target_process: ""
+  target_process: "",
+  monitored_apps: [],
+  is_app_running: false,
+  auto_watch_status: "Standby: Watching for Games",
+  start_with_windows: false
 };
 
 const canvas = document.getElementById("meterCanvas");
@@ -359,17 +364,113 @@ function setScope(mode) {
 
   const drawer = document.getElementById("customAppDrawer");
   if (drawer) {
-    if (mode === "specific_app") {
+    if (mode === "master_device") {
+      drawer.style.display = "none";
+    } else {
       drawer.style.display = "flex";
       refreshAudioProcesses();
-    } else {
-      drawer.style.display = "none";
     }
   }
 
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_scope(mode);
   }
+}
+
+function onAutoWatchToggle(enabled) {
+  state.auto_watch_mode = enabled;
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.set_auto_watch_mode) {
+    window.pywebview.api.set_auto_watch_mode(enabled);
+  }
+  const badge = document.getElementById("autoStatusBadge");
+  if (badge) {
+    badge.innerText = enabled ? "⚡ Auto-Watch: Standby" : "⚡ Auto-Watch: Disabled";
+    badge.style.display = enabled ? "flex" : "none";
+  }
+}
+
+function toggleAutoStart(enabled) {
+  state.start_with_windows = enabled;
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.set_start_with_windows) {
+    window.pywebview.api.set_start_with_windows(enabled);
+  }
+}
+
+function renderMonitoredChips() {
+  const container = document.getElementById("monitoredChipsList");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!state.monitored_apps || state.monitored_apps.length === 0) {
+    container.innerHTML = '<span style="font-size: 10px; color: #64748b; font-style: italic; padding: 4px 2px;">No monitored apps added yet. Add games below to auto-trigger.</span>';
+    return;
+  }
+
+  state.monitored_apps.forEach(app => {
+    const chip = document.createElement("div");
+    chip.className = "monitored-chip";
+    if (state.active_target && state.active_target.toLowerCase().includes(app.toLowerCase())) {
+      chip.classList.add("chip-active");
+    }
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "chip-name";
+    nameSpan.textContent = `🎮 ${app}`;
+    chip.appendChild(nameSpan);
+
+    const removeBtn = document.createElement("span");
+    removeBtn.className = "chip-remove";
+    removeBtn.innerHTML = "&times;";
+    removeBtn.title = `Remove ${app} from auto-watch`;
+    removeBtn.onclick = (e) => {
+      e.stopPropagation();
+      removeMonitoredApp(app);
+    };
+    chip.appendChild(removeBtn);
+
+    container.appendChild(chip);
+  });
+}
+
+async function addSelectedProcess() {
+  const dropdown = document.getElementById("processDropdown");
+  if (!dropdown || !dropdown.value) return;
+  const proc = dropdown.value.trim();
+  if (!proc) return;
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.add_monitored_app) {
+    state.monitored_apps = await window.pywebview.api.add_monitored_app(proc);
+  } else {
+    if (!state.monitored_apps.includes(proc)) state.monitored_apps.push(proc);
+  }
+  renderMonitoredChips();
+}
+
+async function addCustomInputProcess() {
+  const input = document.getElementById("customProcessInput");
+  if (!input || !input.value) return;
+  let proc = input.value.trim();
+  if (!proc) return;
+  if (!proc.toLowerCase().endsWith(".exe")) {
+    proc += ".exe";
+  }
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.add_monitored_app) {
+    state.monitored_apps = await window.pywebview.api.add_monitored_app(proc);
+  } else {
+    if (!state.monitored_apps.includes(proc)) state.monitored_apps.push(proc);
+  }
+  input.value = "";
+  renderMonitoredChips();
+}
+
+async function removeMonitoredApp(app) {
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.remove_monitored_app) {
+    state.monitored_apps = await window.pywebview.api.remove_monitored_app(app);
+  } else {
+    state.monitored_apps = state.monitored_apps.filter(x => x.toLowerCase() !== app.toLowerCase());
+  }
+  renderMonitoredChips();
 }
 
 async function refreshAudioProcesses() {
@@ -429,6 +530,10 @@ async function browseExeFile() {
       state.target_process = exeName;
       const input = document.getElementById("customProcessInput");
       if (input) input.value = exeName;
+      if (window.pywebview.api.add_monitored_app) {
+        state.monitored_apps = await window.pywebview.api.add_monitored_app(exeName);
+      }
+      renderMonitoredChips();
       await refreshAudioProcesses();
       const dropdown = document.getElementById("processDropdown");
       if (dropdown) dropdown.value = exeName;
@@ -479,6 +584,8 @@ window.receiveTelemetry = function(data) {
   state.peak = data.peak || 0.0;
   state.channel_peaks = data.channel_peaks || [state.peak, state.peak];
   state.gain_reduction_db = data.gain_reduction_db || 0.0;
+  state.is_app_running = data.is_app_running ?? true;
+  state.auto_watch_status = data.auto_watch_status || "";
 
   if (state.active_target !== data.active_target || state.is_game_isolated !== data.is_game_isolated) {
     state.active_target = data.active_target || "Master Audio";
@@ -492,6 +599,49 @@ window.receiveTelemetry = function(data) {
       badge.style.background = state.is_game_isolated ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)";
       badge.style.borderColor = state.is_game_isolated ? "rgba(16, 185, 129, 0.35)" : "rgba(245, 158, 11, 0.35)";
       badge.style.color = state.is_game_isolated ? "#10b981" : "#f59e0b";
+    }
+
+    // Highlight running chip in list
+    document.querySelectorAll(".monitored-chip").forEach(chip => {
+      const name = chip.querySelector(".chip-name");
+      if (name && state.active_target.toLowerCase().includes(name.textContent.replace("🎮 ", "").toLowerCase().trim())) {
+        chip.classList.add("chip-active");
+      } else {
+        chip.classList.remove("chip-active");
+      }
+    });
+  }
+
+  // Live Auto-Watch badge
+  const autoBadge = document.getElementById("autoStatusBadge");
+  if (autoBadge) {
+    if (!state.auto_watch_mode) {
+      autoBadge.style.display = "none";
+    } else {
+      autoBadge.style.display = "flex";
+      if (state.is_app_running && state.is_game_isolated) {
+        autoBadge.innerText = "⚡ Auto-Watch: Clamping Active";
+        autoBadge.style.background = "rgba(16, 185, 129, 0.2)";
+        autoBadge.style.borderColor = "rgba(16, 185, 129, 0.5)";
+        autoBadge.style.color = "#10b981";
+      } else {
+        autoBadge.innerText = "⚡ Auto-Watch: Standby";
+        autoBadge.style.background = "rgba(0, 242, 254, 0.15)";
+        autoBadge.style.borderColor = "rgba(0, 242, 254, 0.35)";
+        autoBadge.style.color = "#00f2fe";
+      }
+    }
+  }
+
+  // Update status subtitle
+  const subText = document.getElementById("powerStatusSub");
+  if (subText) {
+    if (!state.enabled) {
+      subText.innerText = "Bypassed — Audio Passing Through Raw";
+    } else if (state.auto_watch_mode && !state.is_app_running && state.target_mode !== "master_device") {
+      subText.innerText = "Standby (100% Raw Audio) — Auto-engages when game launches";
+    } else {
+      subText.innerText = "Zero-Ducking Audio Ceiling Active";
     }
   }
 
@@ -514,6 +664,9 @@ window.receiveTelemetry = function(data) {
 
 window.receiveInitialConfig = function(cfg) {
   state.enabled = cfg.enabled ?? true;
+  state.auto_watch_mode = cfg.auto_watch_mode ?? true;
+  state.monitored_apps = cfg.monitored_apps || [];
+  state.start_with_windows = cfg.start_with_windows ?? false;
   state.threshold_db = cfg.threshold_db ?? -12.0;
   state.threshold_percent = cfg.threshold_percent ?? 50.0;
   state.knee_mode = cfg.knee_mode ?? "soft_knee";
@@ -527,6 +680,12 @@ window.receiveInitialConfig = function(cfg) {
   text.style.color = state.enabled ? "var(--accent-emerald)" : "var(--accent-crimson)";
   dot.style.backgroundColor = state.enabled ? "var(--accent-emerald)" : "var(--accent-crimson)";
   dot.style.boxShadow = state.enabled ? "0 0 8px var(--accent-emerald)" : "0 0 8px var(--accent-crimson)";
+
+  const autoSwitch = document.getElementById("autoWatchSwitch");
+  if (autoSwitch) autoSwitch.checked = state.auto_watch_mode;
+
+  const startSwitch = document.getElementById("autoStartSwitch");
+  if (startSwitch) startSwitch.checked = state.start_with_windows;
 
   const cSlider = document.getElementById("ceilingSlider");
   cSlider.value = state.threshold_db;
@@ -544,6 +703,7 @@ window.receiveInitialConfig = function(cfg) {
   const pInput = document.getElementById("customProcessInput");
   if (pInput) pInput.value = state.target_process;
 
+  renderMonitoredChips();
   setScope(state.target_mode);
 };
 
@@ -598,4 +758,11 @@ window.addEventListener("DOMContentLoaded", () => {
   initWindowDrag();
   updateSliderTrack(document.getElementById("ceilingSlider"), "#ff2a5f");
   updateSliderTrack(document.getElementById("releaseSlider"), "#00f2fe");
+
+  const dropdown = document.getElementById("processDropdown");
+  if (dropdown) {
+    dropdown.addEventListener("change", (e) => {
+      onProcessDropdownSelect(e.target.value);
+    });
+  }
 });

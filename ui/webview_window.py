@@ -38,6 +38,29 @@ class WebviewApi:
         self._app.config.set("target_mode", str(scope_mode))
         self._app.engine.rescan_sessions_now()
 
+    def set_auto_watch_mode(self, enabled):
+        self._app.config.set("auto_watch_mode", bool(enabled))
+        self._app.engine.rescan_sessions_now()
+
+    def add_monitored_app(self, exe_name):
+        self._app.config.add_monitored_app(exe_name)
+        self._app.engine.rescan_sessions_now()
+        return self._app.config.get("monitored_apps", [])
+
+    def remove_monitored_app(self, exe_name):
+        self._app.config.remove_monitored_app(exe_name)
+        self._app.engine.rescan_sessions_now()
+        return self._app.config.get("monitored_apps", [])
+
+    def get_monitored_apps(self):
+        return self._app.config.get("monitored_apps", [])
+
+    def set_start_with_windows(self, enabled):
+        app_path = sys.executable
+        if not getattr(sys, 'frozen', False):
+            app_path = os.path.abspath(sys.argv[0])
+        self._app.config.set_start_with_windows(bool(enabled), app_path)
+
     def get_audio_processes(self):
         from pycaw.pycaw import AudioUtilities
         from comtypes import CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED
