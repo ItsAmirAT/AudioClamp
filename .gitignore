@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Distribution
+build/
+dist/
+*.spec
+
+# User Data / Local Settings
+audioclamp_config.json
+recovery.json
+
+# Virtual Environments
+venv/
+env/
+.venv/
+
+# IDE & Editor Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Generated Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/

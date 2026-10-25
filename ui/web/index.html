@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AudioClamp — Studio Peak Limiter</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Frameless Custom Titlebar -->
+  <div class="titlebar pywebview-drag-region">
+    <div class="titlebar-brand">
+      <svg class="brand-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="clampGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#00f2fe"/>
+            <stop offset="100%" stop-color="#3b82f6"/>
+          </linearGradient>
+          <linearGradient id="waveGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#00f2fe"/>
+            <stop offset="100%" stop-color="#38bdf8"/>
+          </linearGradient>
+        </defs>
+        <path d="M16 2.5L27 7.5V16C27 23 21.8 28.2 16 29.5C10.2 28.2 5 23 5 16V7.5L16 2.5Z" 
+              fill="rgba(12, 18, 32, 0.95)" stroke="url(#clampGrad)" stroke-width="1.8"/>
+        <line x1="10" y1="18" x2="10" y2="14" stroke="url(#waveGrad)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="14" y1="21" x2="14" y2="11" stroke="url(#waveGrad)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="18" y1="23" x2="18" y2="9" stroke="url(#waveGrad)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="22" y1="19" x2="22" y2="13" stroke="url(#waveGrad)" stroke-width="2" stroke-linecap="round"/>
+        <rect x="13.5" y="15.5" width="5" height="4.5" rx="1" fill="#00f2fe"/>
+        <path d="M14.5 15.5V13.8C14.5 13 15.2 12.3 16 12.3C16.8 12.3 17.5 13 17.5 13.8V15.5" 
+              stroke="#00f2fe" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+      </svg>
+      <div class="brand-text-col">
+        <span class="brand-title">AUDIOCLAMP</span>
+        <span class="brand-sub">STUDIO PEAK LIMITER</span>
+      </div>
+      <span class="brand-badge">ULTRA-HD</span>
+    </div>
+
+    <div class="titlebar-controls" onmousedown="event.stopPropagation();">
+      <!-- Ko-fi Support Button -->
+      <button class="btn-donate-top" onclick="openDonationLink()" title="Support development on Ko-fi">
+        ☕ Support
+      </button>
+      <button class="win-btn" onclick="minimizeWindow()" title="Minimize to Tray">
+        <svg width="10" height="2" viewBox="0 0 10 2" fill="currentColor"><rect width="10" height="2" rx="1"/></svg>
+      </button>
+      <button class="win-btn" onclick="toggleMaximize()" title="Maximize / Restore">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="1.5" y="1.5" width="7" height="7" rx="1"/>
+        </svg>
+      </button>
+      <button class="win-btn close-btn" onclick="closeWindow()" title="Close to Tray">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+          <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Viewport -->
+  <div class="main-content">
+
+    <!-- Top Status & Target Scope Card -->
+    <div class="card power-card">
+      <div class="top-action-bar">
+        <!-- Power Switch -->
+        <label class="power-switch-container">
+          <div class="cyber-switch">
+            <input type="checkbox" id="powerSwitch" checked>
+            <span class="cyber-switch-track">
+              <span class="cyber-switch-thumb"></span>
+            </span>
+          </div>
+          <div class="power-label-box">
+            <div class="power-status-row">
+              <span class="status-indicator-dot" id="powerDot"></span>
+              <span class="power-status-text" id="powerStatusText">LIMITER ACTIVE</span>
+            </div>
+            <span class="power-status-sub">Zero-Ducking Audio Ceiling Active</span>
+          </div>
+        </label>
+
+        <!-- Scope Pills -->
+        <div class="scope-pills">
+          <button class="scope-btn active" id="btnScopeAuto" onclick="setScope('auto_game')">🎯 Auto Game</button>
+          <button class="scope-btn" id="btnScopeApp" onclick="setScope('specific_app')">🎮 Custom App</button>
+          <button class="scope-btn" id="btnScopeMaster" onclick="setScope('master_device')">🔊 Master</button>
+        </div>
+      </div>
+
+      <!-- Custom App Drawer -->
+      <div class="custom-app-drawer" id="customAppDrawer" style="display: none;">
+        <div class="drawer-header">
+          <span class="drawer-title">TARGET GAME / APPLICATION:</span>
+          <button class="btn-refresh-procs" onclick="refreshAudioProcesses()" title="Refresh Running Audio Apps">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Refresh List
+          </button>
+        </div>
+        <div class="drawer-controls">
+          <select id="processDropdown" class="proc-select" onchange="onProcessDropdownSelect(this.value)">
+            <option value="">-- Select Active Game / Audio Process --</option>
+          </select>
+          <span class="drawer-or">OR</span>
+          <input type="text" id="customProcessInput" class="proc-input" placeholder="Type exe name (e.g. cs2.exe)" onchange="onManualProcessInput(this.value)">
+          <button class="btn-browse-exe" onclick="browseExeFile()" title="Browse for executable on PC">📁 Browse .exe</button>
+        </div>
+      </div>
+
+      <!-- Target Status Banner -->
+      <div class="target-banner">
+        <div class="target-info">
+          <span class="target-bullet">●</span>
+          <span id="targetBannerText">Target: Master Audio</span>
+        </div>
+        <span class="discord-safe-badge" id="discordBadge">🛡️ Discord Safe</span>
+      </div>
+    </div>
+
+    <!-- Meter & Visualizer Card -->
+    <div class="card meter-card">
+      <div class="meter-canvas-wrapper">
+        <canvas id="meterCanvas"></canvas>
+      </div>
+      <div class="meter-telemetry-row">
+        <div class="telemetry-item">
+          <span class="telemetry-label">TRUE INPUT PEAK</span>
+          <span class="telemetry-val" id="peakReadout">-∞ dBFS (0%)</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">HRTF SPATIAL BALANCE</span>
+          <span class="telemetry-val stereo-safe">Stereo Linked (100% Intact)</span>
+        </div>
+        <div class="telemetry-item" style="align-items: flex-end;">
+          <span class="telemetry-label">ACTIVE GAIN REDUCTION</span>
+          <span class="telemetry-val reduction" id="grReadout">0.0 dB</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ceiling Slider Card -->
+    <div class="card ceiling-card">
+      <div class="slider-group">
+        <div class="slider-header">
+          <div class="slider-title-col">
+            <span class="slider-title">SOUND CEILING (MAXIMUM LOUDNESS LIMIT)</span>
+            <span class="slider-subtitle">Ear-safe threshold — gunshots & red zones clamp silently above this line</span>
+          </div>
+          <span class="slider-readout" id="ceilingReadout">-12.0 dBFS (50%)</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="ceilingSlider" min="-30" max="0" step="0.5" value="-12">
+        </div>
+        <div class="quick-jump-row">
+          <span class="quick-jump-label">QUICK CEILING PRESETS:</span>
+          <button class="quick-btn" onclick="setCeilingDb(-6)">-6 dB (Gentle)</button>
+          <button class="quick-btn" onclick="setCeilingDb(-12)">-12 dB (PUBG/FPS)</button>
+          <button class="quick-btn" onclick="setCeilingDb(-18)">-18 dB (Quiet)</button>
+          <button class="quick-btn" onclick="setCeilingDb(-24)">-24 dB (Late Night)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dynamics & Distance Preservation Card -->
+    <div class="card dynamics-card">
+      <div class="dynamics-grid">
+        <!-- Soft-Knee Distance Preservation Switch -->
+        <label class="distance-switch-box">
+          <div class="cyber-switch">
+            <input type="checkbox" id="kneeSwitch" checked>
+            <span class="cyber-switch-track">
+              <span class="cyber-switch-thumb"></span>
+            </span>
+          </div>
+          <div class="distance-desc">
+            <span class="distance-title">Preserve 30m vs 150m Distance Cues</span>
+            <span class="distance-sub">Soft-Knee 4:1 curve prevents distant sniper shots from sounding right next to you</span>
+          </div>
+        </label>
+
+        <!-- Footstep Recovery Control -->
+        <div class="release-control-box">
+          <div class="release-header">
+            <span class="distance-title">Footstep Recovery</span>
+            <span class="release-num" id="releaseNum">120 ms</span>
+          </div>
+          <div class="slider-container">
+            <input type="range" id="releaseSlider" min="50" max="600" step="10" value="120">
+          </div>
+          <div class="release-sub-row">
+            <span>Fast (80ms)</span>
+            <span>Balanced (120ms)</span>
+            <span>Smooth (300ms)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Profiles Grid -->
+    <div class="card profiles-card">
+      <div class="profiles-header">
+        <span>COMPETITIVE ESPORTS & MEDIA PROFILES</span>
+        <span class="profiles-sub">Instant 1-Click Calibration</span>
+      </div>
+      <div class="profiles-grid">
+        <div class="profile-card active" onclick="applyProfile('PUBG: BATTLEGROUNDS')">
+          <span class="profile-name">PUBG</span>
+          <span class="profile-stats">-12 dB • 120ms</span>
+        </div>
+        <div class="profile-card" onclick="applyProfile('Escape from Tarkov')">
+          <span class="profile-name">Tarkov</span>
+          <span class="profile-stats">-10 dB • 100ms</span>
+        </div>
+        <div class="profile-card" onclick="applyProfile('Counter-Strike 2')">
+          <span class="profile-name">CS2</span>
+          <span class="profile-stats">-8 dB • 80ms</span>
+        </div>
+        <div class="profile-card" onclick="applyProfile('Call of Duty / Warzone')">
+          <span class="profile-name">Warzone</span>
+          <span class="profile-stats">-14 dB • 150ms</span>
+        </div>
+        <div class="profile-card" onclick="applyProfile('Valorant')">
+          <span class="profile-name">Valorant</span>
+          <span class="profile-stats">-9 dB • 90ms</span>
+        </div>
+        <div class="profile-card" onclick="applyProfile('Apex Legends')">
+          <span class="profile-name">Apex</span>
+          <span class="profile-stats">-11 dB • 130ms</span>
+        </div>
+        <div class="profile-card" onclick="applyProfile('Cinema / Movie Night')">
+          <span class="profile-name">Cinema</span>
+          <span class="profile-stats">-15 dB • 600ms</span>
+        </div>
+        <div class="profile-card" onclick="applyProfile('Late Night (Whisper)')">
+          <span class="profile-name">Late Night</span>
+          <span class="profile-stats">-20 dB • 800ms</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Emergency & Hotkey Footer -->
+  <div class="footer-bar">
+    <button class="btn-emergency" onclick="emergencyReset()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      Emergency Volume Reset
+    </button>
+    <div class="footer-center">
+      <button class="btn-kofi" onclick="openDonationLink()" title="Support the developer on Ko-fi">
+        ☕ Buy Me a Coffee
+      </button>
+    </div>
+    <div class="footer-hotkeys">
+      <span>Toggle: <kbd class="hotkey-kbd">Ctrl+Alt+L</kbd></span>
+      <span>Reset: <kbd class="hotkey-kbd">Ctrl+Alt+R</kbd></span>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
