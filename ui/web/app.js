@@ -77,10 +77,10 @@ function renderMeter(now) {
 
   ctx.clearRect(0, 0, w, h);
 
-  const padTop = 20;
-  const padBottom = 24;
-  const padLeft = 52;
-  const padRight = 92;
+  const padTop = 16;
+  const padBottom = 22;
+  const padLeft = 48;
+  const padRight = 100;
   const meterH = Math.max(10, h - padTop - padBottom);
   const availW = Math.max(10, w - padLeft - padRight);
 
@@ -99,53 +99,56 @@ function renderMeter(now) {
     return dbToY(db);
   }
 
-  const dbTicks = [0, -6, -12, -18, -24, -30, -36];
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-  ctx.fillStyle = "#94a3b8";
-  ctx.font = "700 13px 'Plus Jakarta Sans', sans-serif";
+  // 1. Subtle acoustic background grid lines
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.025)";
+  ctx.lineWidth = 1;
+  const gridStepX = Math.round(availW / 8);
+  for (let gx = padLeft; gx <= padLeft + availW; gx += gridStepX) {
+    ctx.beginPath();
+    ctx.moveTo(gx + 0.5, padTop);
+    ctx.lineTo(gx + 0.5, padTop + meterH);
+    ctx.stroke();
+  }
+
+  // 2. Horizontal decibel ticks on the left with Google Stitch color accents
+  const dbTicks = [
+    { db: 0, color: "#ff2a5f" },
+    { db: -6, color: "#f59e0b" },
+    { db: -12, color: "#ff4d79" },
+    { db: -18, color: "#64748b" },
+    { db: -24, color: "#64748b" },
+    { db: -36, color: "#64748b" }
+  ];
+
+  ctx.font = "700 10.5px 'JetBrains Mono', monospace";
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
 
-  dbTicks.forEach(db => {
-    const y = Math.round(dbToY(db)) + 0.5;
+  dbTicks.forEach(tick => {
+    const y = Math.round(dbToY(tick.db)) + 0.5;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
     ctx.beginPath();
-    ctx.setLineDash([2, 3]);
-    ctx.moveTo(padLeft - 4, y);
+    ctx.setLineDash([2, 4]);
+    ctx.moveTo(padLeft - 2, y);
     ctx.lineTo(padLeft + availW, y);
     ctx.stroke();
-    ctx.fillText(`${db}`, padLeft - 8, y);
+
+    ctx.fillStyle = tick.color;
+    ctx.fillText(`${tick.db} dB`, padLeft - 6, y);
   });
   ctx.setLineDash([]);
 
-  if (state.knee_mode === "soft_knee") {
-    const kneeTopY = dbToY(state.threshold_db + state.knee_width_db / 2.0);
-    const kneeBotY = dbToY(state.threshold_db - state.knee_width_db / 2.0);
-    const kneeH = Math.max(2, kneeBotY - kneeTopY);
+  // 3. Central Dual VU Meters (LEFT and RIGHT channels centered)
+  const barW = 24;
+  const barGap = 32;
+  const centerX = padLeft + availW / 2;
+  const chX = [centerX - barW - barGap / 2, centerX + barGap / 2];
+  const chLabels = ["LEFT", "RIGHT"];
+  const numSegments = 18;
+  const segH = Math.max(2, Math.floor((meterH - (numSegments - 1) * 2) / numSegments));
 
-    ctx.fillStyle = "rgba(0, 242, 254, 0.06)";
-    ctx.fillRect(padLeft, kneeTopY, availW, kneeH);
-
-    ctx.strokeStyle = "rgba(0, 242, 254, 0.3)";
-    ctx.setLineDash([3, 3]);
-    ctx.strokeRect(padLeft, kneeTopY, availW, kneeH);
-    ctx.setLineDash([]);
-
-    ctx.fillStyle = "rgba(0, 242, 254, 0.85)";
-    ctx.font = "800 11.5px 'Plus Jakarta Sans', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("DISTANCE DYNAMICS ZONE (SOFT-KNEE 4:1)", padLeft + 8, kneeBotY - 4);
-  }
-
-  const numCh = Math.min(6, state.channel_peaks.length);
-  const barGap = 18;
-  const barW = Math.max(28, Math.floor((availW - (numCh - 1) * barGap) / numCh));
-  const chNames = ["LEFT (L)", "RIGHT (R)", "CENTER", "LFE", "SURROUND L", "SURROUND R"];
-
-  const numSegments = 26;
-  const segHeight = Math.max(2, Math.floor((meterH - (numSegments - 1) * 2) / numSegments));
-
-  for (let i = 0; i < numCh; i++) {
-    const bx = padLeft + i * (barW + barGap);
+  for (let i = 0; i < 2; i++) {
+    const bx = Math.round(chX[i]);
     const targetVal = state.channel_peaks[i] || 0.0;
 
     const alpha = 1.0 - Math.exp(-dt / 0.045);
@@ -160,16 +163,17 @@ function renderMeter(now) {
       peakHolds[i] = Math.max(0.0, peakHolds[i] - decay);
     }
 
-    ctx.fillStyle = "rgba(10, 15, 26, 0.9)";
-    ctx.fillRect(bx, padTop, barW, meterH);
+    // Slot border & background
+    ctx.fillStyle = "rgba(8, 12, 22, 0.9)";
+    ctx.fillRect(bx - 1, padTop, barW + 2, meterH);
     ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.strokeRect(bx, padTop, barW, meterH);
+    ctx.strokeRect(bx - 1, padTop, barW + 2, meterH);
 
     const activeTopY = scalarToY(dispVal);
     const threshY = dbToY(state.threshold_db);
 
     for (let s = 0; s < numSegments; s++) {
-      const sy = padTop + meterH - (s + 1) * (segHeight + 2);
+      const sy = padTop + meterH - (s + 1) * (segH + 2);
       const isLit = sy >= activeTopY;
 
       if (isLit) {
@@ -184,115 +188,116 @@ function renderMeter(now) {
         ctx.fillStyle = "rgba(255, 255, 255, 0.035)";
       }
 
-      ctx.fillRect(bx + 2, sy, barW - 4, segHeight);
+      ctx.fillRect(bx + 1, sy, barW - 2, segH);
     }
 
+    // High-res white peak hold indicator
     if (peakHolds[i] > 0.01) {
       const pkY = Math.round(scalarToY(peakHolds[i])) + 0.5;
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(bx + 1, pkY);
-      ctx.lineTo(bx + barW - 1, pkY);
+      ctx.moveTo(bx, pkY);
+      ctx.lineTo(bx + barW, pkY);
       ctx.stroke();
       ctx.lineWidth = 1;
     }
 
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = "800 12px 'Plus Jakarta Sans', sans-serif";
+    // Channel label below slot
+    ctx.fillStyle = "#64748b";
+    ctx.font = "800 10px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
-    ctx.fillText(chNames[i] || `CH${i+1}`, bx + barW / 2, padTop + meterH + 16);
+    ctx.fillText(chLabels[i], bx + barW / 2, padTop + meterH + 15);
   }
 
+  // 4. Horizontal Limiter Threshold Line across the meter
   const threshY = Math.round(dbToY(state.threshold_db)) + 0.5;
   const isCeilActive = isDraggingCeiling || isCeilingHovered;
 
-  if (isCeilActive) {
-    ctx.shadowColor = "#ff2a5f";
-    ctx.shadowBlur = 8;
-  }
-
-  ctx.strokeStyle = isCeilActive ? "#ff4d79" : "#ff2a5f";
-  ctx.lineWidth = isCeilActive ? 2.5 : 2;
-  ctx.beginPath();
-  ctx.moveTo(padLeft - 2, threshY);
-  ctx.lineTo(padLeft + availW + 2, threshY);
-  ctx.stroke();
-
-  const badgeW = 118;
-  const badgeH = 26;
-  const badgeX = padLeft + availW - badgeW - 6;
-  const badgeY = Math.round(threshY - badgeH / 2);
-
-  ctx.fillStyle = isCeilActive ? "rgba(22, 28, 48, 0.98)" : "rgba(14, 20, 36, 0.96)";
   ctx.strokeStyle = isCeilActive ? "#ff4d79" : "#ff2a5f";
   ctx.lineWidth = isCeilActive ? 2 : 1.5;
   ctx.beginPath();
-  ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
+  ctx.moveTo(padLeft - 2, threshY);
+  ctx.lineTo(padLeft + availW - 6, threshY);
+  ctx.stroke();
+
+  // LIMIT pill badge on the line
+  const badgeW = 92;
+  const badgeH = 20;
+  const badgeX = padLeft + availW - badgeW - 6;
+  const badgeY = Math.round(threshY - badgeH / 2);
+
+  ctx.fillStyle = "#ff2a5f";
+  ctx.beginPath();
+  ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
+  ctx.fill();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "800 10.5px 'JetBrains Mono', monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`LIMIT: ${state.threshold_db.toFixed(0)} dB`, badgeX + badgeW / 2, threshY);
+
+  // 5. Gain Reduction (GR) container on the right
+  const grX = padLeft + availW + 12;
+  const grW = 82;
+  const grH = meterH;
+
+  ctx.fillStyle = "rgba(7, 11, 20, 0.95)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.beginPath();
+  ctx.roundRect(grX, padTop, grW, grH, 6);
   ctx.fill();
   ctx.stroke();
 
-  ctx.shadowColor = "transparent";
-  ctx.shadowBlur = 0;
-
-  ctx.fillStyle = isCeilActive ? "#ffffff" : "#ff2a5f";
-  ctx.font = "800 13px 'JetBrains Mono', sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(`LIMIT: ${state.threshold_db.toFixed(1)} dB`, badgeX + badgeW / 2, threshY);
-
-  const grX = padLeft + availW + 16;
-  const grW = 20;
-
-  ctx.fillStyle = "#090d18";
-  ctx.fillRect(grX, padTop, grW, meterH);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-  ctx.strokeRect(grX, padTop, grW, meterH);
-
-  // Gain Reduction Ticks on right of GR bar
-  const grTicks = [0, -6, -12, -18, -24];
-  ctx.fillStyle = "#64748b";
-  ctx.font = "700 10.5px 'JetBrains Mono', monospace";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  grTicks.forEach(tickDb => {
-    const norm = Math.abs(tickDb) / 30.0;
-    const ty = Math.round(padTop + norm * meterH) + 0.5;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.beginPath();
-    ctx.moveTo(grX + grW, ty);
-    ctx.lineTo(grX + grW + 3, ty);
-    ctx.stroke();
-    ctx.fillText(`${tickDb}`, grX + grW + 5, ty);
-  });
-
   const grAlpha = 1.0 - Math.exp(-dt / 0.06);
   smoothGR = smoothGR + (Math.abs(state.gain_reduction_db) - smoothGR) * grAlpha;
-  if (smoothGR > 0.05) {
-    const grNorm = Math.min(1.0, smoothGR / 30.0);
-    const grFillH = grNorm * meterH;
 
-    const grGrad = ctx.createLinearGradient(0, padTop, 0, padTop + grFillH);
-    grGrad.addColorStop(0, "#f59e0b");
-    grGrad.addColorStop(1, "#ff2a5f");
+  // GR Header readout in crimson
+  ctx.fillStyle = "#ff2a5f";
+  ctx.font = "800 11px 'JetBrains Mono', monospace";
+  ctx.textAlign = "center";
+  const grText = smoothGR > 0.1 ? `-${smoothGR.toFixed(1)} dB` : "-0.0 dB";
+  ctx.fillText(`GR  ${grText}`, grX + grW / 2, padTop + 14);
 
-    ctx.fillStyle = grGrad;
-    ctx.fillRect(grX + 2, padTop + 1, grW - 4, grFillH);
+  // Stacked horizontal attenuation LED bars
+  const numGrBars = 3;
+  const grBarW = grW - 16;
+  const grBarH = 7;
+  const grBarGap = 5;
+  const grBarsStartY = padTop + 24;
+
+  const grIntensity = Math.min(1.0, smoothGR / 12.0);
+  const litBars = Math.round(grIntensity * numGrBars);
+
+  for (let b = 0; b < numGrBars; b++) {
+    const by = grBarsStartY + b * (grBarH + grBarGap);
+    const isBarLit = (b + 1) <= litBars || (smoothGR > 0.4 && b === 0);
+
+    if (isBarLit) {
+      const barGrad = ctx.createLinearGradient(grX + 8, 0, grX + 8 + grBarW, 0);
+      barGrad.addColorStop(0, "#f59e0b");
+      barGrad.addColorStop(1, "#ff2a5f");
+      ctx.fillStyle = barGrad;
+    } else {
+      ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+    }
+
+    ctx.beginPath();
+    ctx.roundRect(grX + 8, by, grBarW, grBarH, 3);
+    ctx.fill();
   }
 
-  ctx.fillStyle = "#94a3b8";
-  ctx.font = "800 11px 'Plus Jakarta Sans', sans-serif";
+  // Ticks at bottom of GR box
+  ctx.fillStyle = "#64748b";
+  ctx.font = "700 8.5px 'JetBrains Mono', monospace";
   ctx.textAlign = "center";
-  ctx.fillText("LIMIT GR", grX + grW / 2, padTop - 6);
-
-  ctx.fillStyle = smoothGR > 0.5 ? "#ff2a5f" : "#64748b";
-  ctx.font = "800 12px 'JetBrains Mono', monospace";
-  ctx.fillText(`${smoothGR > 0.1 ? `-${smoothGR.toFixed(1)}` : "0.0"} dB`, grX + grW / 2, padTop + meterH + 16);
+  ctx.fillText("0dB  -6dB  -12dB", grX + grW / 2, padTop + grH - 8);
 }
 
 function getCeilingY() {
   const rect = canvas.getBoundingClientRect();
-  const minDb = -36.0, maxDb = 0.0, padTop = 20, meterH = rect.height - padTop - 24;
+  const minDb = -36.0, maxDb = 0.0, padTop = 16, meterH = rect.height - padTop - 22;
   const clamped = Math.max(minDb, Math.min(maxDb, state.threshold_db));
   return padTop + (1.0 - (clamped - minDb) / (maxDb - minDb)) * meterH;
 }
@@ -302,8 +307,8 @@ canvas.addEventListener("mousemove", (e) => {
   const y = e.clientY - rect.top;
 
   if (isDraggingCeiling) {
-    const padTop = 20;
-    const meterH = rect.height - padTop - 24;
+    const padTop = 16;
+    const meterH = rect.height - padTop - 22;
     const norm = Math.max(0, Math.min(1, 1.0 - (y - padTop) / meterH));
     const newDb = -36.0 + norm * 36.0;
     updateCeiling(newDb);
@@ -394,11 +399,12 @@ function updateQuickCeilingButtons(db) {
 }
 
 function updateSliderTrack(slider, color) {
+  if (!slider) return;
   const min = parseFloat(slider.min);
   const max = parseFloat(slider.max);
   const val = parseFloat(slider.value);
   const pct = Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100));
-  slider.style.background = `linear-gradient(to right, ${color} 0%, ${color} ${pct}%, #141b2b ${pct}%, #141b2b 100%)`;
+  slider.style.background = `linear-gradient(to right, ${color} 0%, ${color} ${pct}%, #111827 ${pct}%, #111827 100%)`;
 }
 
 function updateCeiling(db) {
@@ -407,10 +413,16 @@ function updateCeiling(db) {
   state.threshold_percent = pct;
 
   const slider = document.getElementById("ceilingSlider");
-  slider.value = state.threshold_db;
-  updateSliderTrack(slider, "#ff2a5f");
+  if (slider) {
+    slider.value = state.threshold_db;
+    updateSliderTrack(slider, "#ff2a5f");
+  }
 
-  document.getElementById("ceilingReadout").innerText = `${state.threshold_db.toFixed(1)} dBFS (${pct.toFixed(0)}%)`;
+  const readout = document.getElementById("ceilingReadout");
+  if (readout) {
+    readout.innerText = `${state.threshold_db.toFixed(1)} dB`;
+  }
+
   updateQuickCeilingButtons(state.threshold_db);
 
   if (window.pywebview && window.pywebview.api) {
@@ -426,9 +438,31 @@ function setReleaseMs(ms) {
   const val = parseInt(ms);
   state.release_ms = val;
   const slider = document.getElementById("releaseSlider");
-  if (slider) slider.value = val;
-  document.getElementById("releaseNum").innerText = `${val} ms`;
-  updateSliderTrack(slider, "#00f2fe");
+  if (slider) {
+    slider.value = val;
+    updateSliderTrack(slider, "#00f2fe");
+  }
+  const readout = document.getElementById("releaseNum");
+  if (readout) {
+    readout.innerText = `${val} ms`;
+  }
+
+  // Update quick release tag active states
+  const tags = [
+    { id: "btnRel_50", val: 50 },
+    { id: "btnRel_120", val: 120 },
+    { id: "btnRel_300", val: 300 }
+  ];
+  tags.forEach(t => {
+    const el = document.getElementById(t.id);
+    if (el) {
+      if (Math.abs(val - t.val) < 15) {
+        el.classList.add("active");
+      } else {
+        el.classList.remove("active");
+      }
+    }
+  });
 
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_release_ms(val);
@@ -436,70 +470,70 @@ function setReleaseMs(ms) {
   showToast(`Footstep Recovery: ${val} ms`, "info");
 }
 
-document.getElementById("ceilingSlider").addEventListener("input", (e) => {
-  updateCeiling(parseFloat(e.target.value));
-});
+function setKneeMode(mode) {
+  state.knee_mode = mode;
+  const softBtn = document.getElementById("kneeSoftBtn");
+  const brickBtn = document.getElementById("kneeBrickBtn");
+  const ratioBadge = document.getElementById("dynamicsRatioBadge");
+  const noteText = document.getElementById("curveNoteText");
+  const kneeSwitch = document.getElementById("kneeSwitch");
 
-document.getElementById("powerSwitch").addEventListener("change", (e) => {
-  const enabled = e.target.checked;
-  state.enabled = enabled;
-  const dot = document.getElementById("powerDot");
-  const text = document.getElementById("powerStatusText");
-
-  text.innerText = enabled ? "LIMITER ACTIVE" : "BYPASSED (OFF)";
-  text.style.color = enabled ? "var(--accent-emerald)" : "var(--accent-crimson)";
-  dot.style.backgroundColor = enabled ? "var(--accent-emerald)" : "var(--accent-crimson)";
-  dot.style.boxShadow = enabled ? "0 0 8px var(--accent-emerald)" : "0 0 8px var(--accent-crimson)";
+  if (mode === "soft_knee") {
+    if (softBtn) softBtn.classList.add("active");
+    if (brickBtn) brickBtn.classList.remove("active");
+    if (ratioBadge) ratioBadge.innerText = "4:1 RATIO";
+    if (noteText) noteText.innerText = "Soft-Knee Preserving Distance (4:1)";
+    if (kneeSwitch) kneeSwitch.checked = true;
+  } else {
+    if (softBtn) softBtn.classList.remove("active");
+    if (brickBtn) brickBtn.classList.add("active");
+    if (ratioBadge) ratioBadge.innerText = "∞:1 RATIO";
+    if (noteText) noteText.innerText = "Brickwall Limiter (∞:1)";
+    if (kneeSwitch) kneeSwitch.checked = false;
+  }
 
   if (window.pywebview && window.pywebview.api) {
-    window.pywebview.api.toggle_enabled(enabled);
+    window.pywebview.api.set_knee_mode(mode);
   }
-});
-
-document.getElementById("kneeSwitch").addEventListener("change", (e) => {
-  state.knee_mode = e.target.checked ? "soft_knee" : "brickwall";
-  if (window.pywebview && window.pywebview.api) {
-    window.pywebview.api.set_knee_mode(state.knee_mode);
-  }
-});
-
-const releaseSlider = document.getElementById("releaseSlider");
-releaseSlider.addEventListener("input", (e) => {
-  const val = parseInt(e.target.value);
-  state.release_ms = val;
-  document.getElementById("releaseNum").innerText = `${val} ms`;
-  updateSliderTrack(releaseSlider, "#00f2fe");
-
-  if (window.pywebview && window.pywebview.api) {
-    window.pywebview.api.set_release_ms(val);
-  }
-});
+  showToast(`Dynamics Mode: ${mode === "soft_knee" ? "Soft-Knee (4:1)" : "Brickwall (∞:1)"}`, "info");
+}
 
 function setScope(mode) {
   state.target_mode = mode;
-  document.querySelectorAll(".scope-btn").forEach(btn => btn.classList.remove("active"));
-  if (mode === "auto_game") document.getElementById("btnScopeAuto").classList.add("active");
-  if (mode === "specific_app") document.getElementById("btnScopeApp").classList.add("active");
-  if (mode === "master_device") document.getElementById("btnScopeMaster").classList.add("active");
-
-  const drawer = document.getElementById("customAppDrawer");
-  const drawerTitle = document.getElementById("drawerTitle");
-  if (drawer) {
-    if (mode === "master_device") {
-      drawer.style.display = "none";
-    } else {
-      drawer.style.display = "flex";
-      if (drawerTitle) {
-        drawerTitle.innerText = mode === "specific_app" ? "TARGET APPLICATION (SELECT APP TO CLAMP):" : "MONITORED GAMES (AUTO-TRIGGER APPS):";
-      }
+  document.querySelectorAll(".scope-pill-btn").forEach(btn => btn.classList.remove("active"));
+  if (mode === "auto_game") {
+    const btn = document.getElementById("btnScopeAuto");
+    if (btn) btn.classList.add("active");
+  }
+  if (mode === "specific_app") {
+    const btn = document.getElementById("btnScopeApp");
+    if (btn) btn.classList.add("active");
+    const drawer = document.getElementById("customAppDrawer");
+    if (drawer) {
+      drawer.style.display = "block";
       refreshAudioProcesses();
     }
+  }
+  if (mode === "master_device") {
+    const btn = document.getElementById("btnScopeMaster");
+    if (btn) btn.classList.add("active");
   }
 
   renderMonitoredChips();
 
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_scope(mode);
+  }
+}
+
+function toggleAppDrawer() {
+  const drawer = document.getElementById("customAppDrawer");
+  if (!drawer) return;
+  if (drawer.style.display === "none" || !drawer.style.display) {
+    drawer.style.display = "block";
+    refreshAudioProcesses();
+  } else {
+    drawer.style.display = "none";
   }
 }
 
@@ -526,11 +560,7 @@ function onAutoWatchToggle(enabled) {
   if (window.pywebview && window.pywebview.api && window.pywebview.api.set_auto_watch_mode) {
     window.pywebview.api.set_auto_watch_mode(enabled);
   }
-  const badge = document.getElementById("autoStatusBadge");
-  if (badge) {
-    badge.innerText = enabled ? "⚡ Auto-Watch: Standby" : "⚡ Auto-Watch: Disabled";
-    badge.style.display = enabled ? "flex" : "none";
-  }
+  showToast(enabled ? "Auto-Watch Mode: Enabled" : "Auto-Watch Mode: Disabled", "info");
 }
 
 function toggleAutoStart(enabled) {
@@ -546,7 +576,7 @@ function renderMonitoredChips() {
   container.innerHTML = "";
 
   if (!state.monitored_apps || state.monitored_apps.length === 0) {
-    container.innerHTML = '<span style="font-size: 10px; color: #64748b; font-style: italic; padding: 4px 2px;">No monitored apps added yet. Add games below to auto-trigger.</span>';
+    container.innerHTML = '<span style="font-size: 11px; color: #64748b; font-style: italic; padding: 2px;">No active games in list. Click + Add to include games.</span>';
     return;
   }
 
@@ -558,12 +588,14 @@ function renderMonitoredChips() {
     const cleanTarget = (state.target_process || "").toLowerCase().replace(".exe", "");
     const cleanActive = (state.active_target || "").toLowerCase().replace(".exe", "");
 
-    if (state.target_mode === "specific_app" && cleanTarget && cleanApp === cleanTarget) {
-      chip.classList.add("chip-selected");
-    }
+    const isRunningNow = cleanActive && cleanActive.includes(cleanApp);
+    const isTarget = state.target_mode === "specific_app" && cleanTarget && cleanApp === cleanTarget;
 
-    if (cleanActive && cleanActive.includes(cleanApp)) {
+    if (isRunningNow || isTarget) {
       chip.classList.add("chip-active");
+      const dot = document.createElement("span");
+      dot.className = "chip-dot";
+      chip.appendChild(dot);
     }
 
     chip.onclick = () => {
@@ -572,13 +604,13 @@ function renderMonitoredChips() {
 
     const nameSpan = document.createElement("span");
     nameSpan.className = "chip-name";
-    nameSpan.textContent = `🎮 ${app}`;
+    nameSpan.textContent = app;
     chip.appendChild(nameSpan);
 
     const removeBtn = document.createElement("span");
     removeBtn.className = "chip-remove";
     removeBtn.innerHTML = "&times;";
-    removeBtn.title = `Remove ${app} from list`;
+    removeBtn.title = `Remove ${app}`;
     removeBtn.onclick = (e) => {
       e.stopPropagation();
       removeMonitoredApp(app);
@@ -669,12 +701,6 @@ function onProcessDropdownSelect(procName) {
   selectTargetProcess(procName);
 }
 
-function onManualProcessInput(procName) {
-  const clean = procName.trim();
-  if (!clean) return;
-  selectTargetProcess(clean);
-}
-
 async function browseExeFile() {
   if (window.pywebview && window.pywebview.api && window.pywebview.api.browse_for_exe) {
     const exeName = await window.pywebview.api.browse_for_exe();
@@ -688,9 +714,9 @@ async function browseExeFile() {
 function highlightProfileCard(profileName) {
   state.active_profile = profileName;
   const clean = (profileName || "").toLowerCase();
-  document.querySelectorAll(".profile-card").forEach(card => {
+  document.querySelectorAll(".profile-item, .profile-card").forEach(card => {
     const p = (card.getAttribute("data-profile") || "").toLowerCase();
-    const name = (card.querySelector(".profile-name")?.textContent || "").toLowerCase();
+    const name = (card.querySelector(".prof-name, .profile-name")?.textContent || "").toLowerCase();
     if (p === clean || clean.includes(name) || (p && clean.includes(p))) {
       card.classList.add("active");
     } else {
@@ -710,7 +736,7 @@ function applyProfile(profileName) {
 
 function emergencyReset() {
   updateCeiling(0.0);
-  showToast("Emergency Reset: Volume Ceiling set to 100% (0 dBFS)", "warning");
+  showToast("Panic Reset: Volume Ceiling set to 100% (0 dB)", "warning");
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.emergency_reset();
   }
@@ -725,9 +751,9 @@ function updateMaximizeIcon(isMax) {
   const icon = document.getElementById("maxRestoreIcon");
   if (!icon) return;
   if (isMax) {
-    icon.innerHTML = '<rect x="3" y="1" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="1" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>';
+    icon.innerHTML = '<rect x="2.5" y="1" width="5.5" height="5.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="1" y="2.5" width="5.5" height="5.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>';
   } else {
-    icon.innerHTML = '<rect x="1.5" y="1.5" width="7" height="7" rx="1"/>';
+    icon.innerHTML = '<rect x="1" y="1" width="8" height="8" rx="1"/>';
   }
 }
 
@@ -760,59 +786,7 @@ window.receiveTelemetry = function(data) {
   if (state.active_target !== data.active_target || state.is_game_isolated !== data.is_game_isolated) {
     state.active_target = data.active_target || "Master Audio";
     state.is_game_isolated = data.is_game_isolated || false;
-
-    const banner = document.getElementById("targetBannerText");
-    const badge = document.getElementById("discordBadge");
-    if (banner) banner.innerText = `Target: ${state.active_target}`;
-    if (badge) {
-      badge.innerText = state.is_game_isolated ? "🛡️ Discord Safe" : "🔊 Entire PC";
-      badge.style.background = state.is_game_isolated ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)";
-      badge.style.borderColor = state.is_game_isolated ? "rgba(16, 185, 129, 0.35)" : "rgba(245, 158, 11, 0.35)";
-      badge.style.color = state.is_game_isolated ? "#10b981" : "#f59e0b";
-    }
-
-    // Highlight running chip in list
-    document.querySelectorAll(".monitored-chip").forEach(chip => {
-      const name = chip.querySelector(".chip-name");
-      if (name && state.active_target.toLowerCase().includes(name.textContent.replace("🎮 ", "").toLowerCase().trim())) {
-        chip.classList.add("chip-active");
-      } else {
-        chip.classList.remove("chip-active");
-      }
-    });
-  }
-
-  // Live Auto-Watch badge
-  const autoBadge = document.getElementById("autoStatusBadge");
-  if (autoBadge) {
-    if (!state.auto_watch_mode) {
-      autoBadge.style.display = "none";
-    } else {
-      autoBadge.style.display = "flex";
-      if (state.is_app_running && state.is_game_isolated) {
-        autoBadge.innerText = "⚡ Auto-Watch: Clamping Active";
-        autoBadge.style.background = "rgba(16, 185, 129, 0.2)";
-        autoBadge.style.borderColor = "rgba(16, 185, 129, 0.5)";
-        autoBadge.style.color = "#10b981";
-      } else {
-        autoBadge.innerText = "⚡ Auto-Watch: Standby";
-        autoBadge.style.background = "rgba(0, 242, 254, 0.15)";
-        autoBadge.style.borderColor = "rgba(0, 242, 254, 0.35)";
-        autoBadge.style.color = "#00f2fe";
-      }
-    }
-  }
-
-  // Update status subtitle
-  const subText = document.getElementById("powerStatusSub");
-  if (subText) {
-    if (!state.enabled) {
-      subText.innerText = "Bypassed — Audio Passing Through Raw";
-    } else if (state.auto_watch_mode && !state.is_app_running && state.target_mode !== "master_device") {
-      subText.innerText = "Standby (100% Raw Audio) — Auto-engages when game launches";
-    } else {
-      subText.innerText = "Zero-Ducking Audio Ceiling Active";
-    }
+    renderMonitoredChips();
   }
 
   const now = performance.now();
@@ -822,12 +796,19 @@ window.receiveTelemetry = function(data) {
     const pkDb = 20.0 * Math.log10(Math.max(0.0001, state.peak));
     const pkReadout = document.getElementById("peakReadout");
     if (pkReadout) {
-      pkReadout.innerText = `${pkDb.toFixed(1)} dBFS (${(state.peak * 100).toFixed(0)}%)`;
+      pkReadout.innerText = `${pkDb.toFixed(1)} dB`;
     }
 
     const grReadout = document.getElementById("grReadout");
     if (grReadout) {
-      grReadout.innerText = Math.abs(state.gain_reduction_db) > 0.1 ? `-${Math.abs(state.gain_reduction_db).toFixed(1)} dB` : "0.0 dB";
+      const grVal = Math.abs(state.gain_reduction_db);
+      grReadout.innerText = grVal > 0.1 ? `-${grVal.toFixed(1)} dB` : "-0.0 dB";
+    }
+
+    const outReadout = document.getElementById("outReadout");
+    if (outReadout) {
+      const outDb = Math.min(state.threshold_db, pkDb);
+      outReadout.innerText = `${outDb.toFixed(1)} dB (CLAMPED)`;
     }
   }
 };
@@ -843,13 +824,15 @@ window.receiveInitialConfig = function(cfg) {
   state.release_ms = cfg.release_ms ?? 120;
   state.target_mode = cfg.target_mode ?? "auto_game";
 
-  document.getElementById("powerSwitch").checked = state.enabled;
-  const dot = document.getElementById("powerDot");
-  const text = document.getElementById("powerStatusText");
-  text.innerText = state.enabled ? "LIMITER ACTIVE" : "BYPASSED (OFF)";
-  text.style.color = state.enabled ? "var(--accent-emerald)" : "var(--accent-crimson)";
-  dot.style.backgroundColor = state.enabled ? "var(--accent-emerald)" : "var(--accent-crimson)";
-  dot.style.boxShadow = state.enabled ? "0 0 8px var(--accent-emerald)" : "0 0 8px var(--accent-crimson)";
+  const pSwitch = document.getElementById("powerSwitch");
+  if (pSwitch) pSwitch.checked = state.enabled;
+  const pBadge = document.getElementById("powerStatusBadge");
+  if (pBadge) {
+    pBadge.innerText = state.enabled ? "ONLINE" : "OFF";
+    pBadge.style.color = state.enabled ? "var(--accent-emerald)" : "var(--accent-crimson)";
+    pBadge.style.borderColor = state.enabled ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 42, 95, 0.4)";
+    pBadge.style.background = state.enabled ? "rgba(16, 185, 129, 0.12)" : "rgba(255, 42, 95, 0.12)";
+  }
 
   const autoSwitch = document.getElementById("autoWatchSwitch");
   if (autoSwitch) autoSwitch.checked = state.auto_watch_mode;
@@ -858,16 +841,26 @@ window.receiveInitialConfig = function(cfg) {
   if (startSwitch) startSwitch.checked = state.start_with_windows;
 
   const cSlider = document.getElementById("ceilingSlider");
-  cSlider.value = state.threshold_db;
-  updateSliderTrack(cSlider, "#ff2a5f");
-  document.getElementById("ceilingReadout").innerText = `${state.threshold_db.toFixed(1)} dBFS (${state.threshold_percent.toFixed(0)}%)`;
+  if (cSlider) {
+    cSlider.value = state.threshold_db;
+    updateSliderTrack(cSlider, "#ff2a5f");
+  }
+  const cReadout = document.getElementById("ceilingReadout");
+  if (cReadout) {
+    cReadout.innerText = `${state.threshold_db.toFixed(1)} dB`;
+  }
 
-  document.getElementById("kneeSwitch").checked = (state.knee_mode === "soft_knee");
+  setKneeMode(state.knee_mode);
 
   const rSlider = document.getElementById("releaseSlider");
-  rSlider.value = state.release_ms;
-  updateSliderTrack(rSlider, "#00f2fe");
-  document.getElementById("releaseNum").innerText = `${state.release_ms} ms`;
+  if (rSlider) {
+    rSlider.value = state.release_ms;
+    updateSliderTrack(rSlider, "#00f2fe");
+  }
+  const rReadout = document.getElementById("releaseNum");
+  if (rReadout) {
+    rReadout.innerText = `${state.release_ms} ms`;
+  }
 
   state.target_process = cfg.target_process || "";
   const pInput = document.getElementById("customProcessInput");
@@ -890,7 +883,7 @@ function initWindowDrag() {
   let startY = 0;
 
   titlebar.addEventListener("dblclick", (e) => {
-    if (e.target.closest(".titlebar-controls") || e.target.closest("button") || e.target.closest("input")) {
+    if (e.target.closest(".titlebar-right") || e.target.closest("button") || e.target.closest("input")) {
       return;
     }
     toggleMaximize();
@@ -898,7 +891,7 @@ function initWindowDrag() {
 
   titlebar.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
-    if (e.target.closest(".titlebar-controls") || e.target.closest("button") || e.target.closest("input")) {
+    if (e.target.closest(".titlebar-right") || e.target.closest("button") || e.target.closest("input")) {
       return;
     }
     isDragging = true;
@@ -940,6 +933,38 @@ window.addEventListener("DOMContentLoaded", () => {
   updateSliderTrack(document.getElementById("ceilingSlider"), "#ff2a5f");
   updateSliderTrack(document.getElementById("releaseSlider"), "#00f2fe");
   updateQuickCeilingButtons(state.threshold_db);
+
+  const cSlider = document.getElementById("ceilingSlider");
+  if (cSlider) {
+    cSlider.addEventListener("input", (e) => {
+      updateCeiling(parseFloat(e.target.value));
+    });
+  }
+
+  const rSlider = document.getElementById("releaseSlider");
+  if (rSlider) {
+    rSlider.addEventListener("input", (e) => {
+      setReleaseMs(parseInt(e.target.value));
+    });
+  }
+
+  const pSwitch = document.getElementById("powerSwitch");
+  if (pSwitch) {
+    pSwitch.addEventListener("change", (e) => {
+      const enabled = e.target.checked;
+      state.enabled = enabled;
+      const pBadge = document.getElementById("powerStatusBadge");
+      if (pBadge) {
+        pBadge.innerText = enabled ? "ONLINE" : "OFF";
+        pBadge.style.color = enabled ? "var(--accent-emerald)" : "var(--accent-crimson)";
+        pBadge.style.borderColor = enabled ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 42, 95, 0.4)";
+        pBadge.style.background = enabled ? "rgba(16, 185, 129, 0.12)" : "rgba(255, 42, 95, 0.12)";
+      }
+      if (window.pywebview && window.pywebview.api) {
+        window.pywebview.api.toggle_enabled(enabled);
+      }
+    });
+  }
 
   const dropdown = document.getElementById("processDropdown");
   if (dropdown) {

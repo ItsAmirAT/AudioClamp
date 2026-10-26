@@ -5,296 +5,311 @@
   <title>AudioClamp — Studio Peak Limiter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <!-- Frameless Custom Titlebar -->
   <div class="titlebar pywebview-drag-region">
-    <div class="titlebar-brand">
-      <svg class="brand-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="clampGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color="#00f2fe"/>
-            <stop offset="100%" stop-color="#3b82f6"/>
-          </linearGradient>
-          <linearGradient id="waveGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#00f2fe"/>
-            <stop offset="100%" stop-color="#38bdf8"/>
-          </linearGradient>
-        </defs>
-        <path d="M16 2.5L27 7.5V16C27 23 21.8 28.2 16 29.5C10.2 28.2 5 23 5 16V7.5L16 2.5Z" 
-              fill="rgba(12, 18, 32, 0.95)" stroke="url(#clampGrad)" stroke-width="1.8"/>
-        <line x1="10" y1="18" x2="10" y2="14" stroke="url(#waveGrad)" stroke-width="2" stroke-linecap="round"/>
-        <line x1="14" y1="21" x2="14" y2="11" stroke="url(#waveGrad)" stroke-width="2" stroke-linecap="round"/>
-        <line x1="18" y1="23" x2="18" y2="9" stroke="url(#waveGrad)" stroke-width="2" stroke-linecap="round"/>
-        <line x1="22" y1="19" x2="22" y2="13" stroke="url(#waveGrad)" stroke-width="2" stroke-linecap="round"/>
-        <rect x="13.5" y="15.5" width="5" height="4.5" rx="1" fill="#00f2fe"/>
-        <path d="M14.5 15.5V13.8C14.5 13 15.2 12.3 16 12.3C16.8 12.3 17.5 13 17.5 13.8V15.5" 
-              stroke="#00f2fe" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+    <div class="titlebar-left">
+      <svg class="brand-shield" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 2L24 6.5V14C24 20.2 19.8 24.8 14 26C8.2 24.8 4 20.2 4 14V6.5L14 2Z" 
+              fill="rgba(0, 242, 254, 0.08)" stroke="#00f2fe" stroke-width="1.8"/>
+        <line x1="8.5" y1="16" x2="8.5" y2="12" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="12" y1="18.5" x2="12" y2="9.5" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="15.5" y1="20" x2="15.5" y2="8" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="19" y1="16.5" x2="19" y2="11.5" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
       </svg>
-      <div class="brand-text-col">
-        <span class="brand-title">AUDIOCLAMP</span>
-        <span class="brand-sub">STUDIO PEAK LIMITER</span>
+      <span class="brand-title">AUDIOCLAMP</span>
+      <span class="brand-version">v2.4</span>
+      <span class="titlebar-divider">|</span>
+      <div class="latency-capsule">
+        <span class="latency-dot"></span>
+        <span class="latency-text">Active · 0.24ms latency</span>
       </div>
-      <span class="brand-badge">ULTRA-HD</span>
     </div>
 
-    <div class="titlebar-controls" onmousedown="event.stopPropagation();">
-      <!-- Ko-fi Support Button in Titlebar -->
-      <button class="btn-donate-top" onclick="openDonationLink()" title="Support development on Ko-fi">
-        ☕ Support
+    <div class="titlebar-right" onmousedown="event.stopPropagation();">
+      <button class="btn-support-top" onclick="openDonationLink()" title="Support development on Ko-fi">
+        <span>☕</span> Support
       </button>
-      <button class="win-btn" onclick="minimizeWindow()" title="Minimize to Tray">
-        <svg width="10" height="2" viewBox="0 0 10 2" fill="currentColor"><rect width="10" height="2" rx="1"/></svg>
-      </button>
-      <button class="win-btn" id="btnMaxRestore" onclick="toggleMaximize()" title="Maximize / Restore">
-        <svg id="maxRestoreIcon" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3">
-          <rect x="1.5" y="1.5" width="7" height="7" rx="1"/>
-        </svg>
-      </button>
-      <button class="win-btn close-btn" onclick="closeWindow()" title="Close to Tray">
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-          <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-        </svg>
-      </button>
+      <div class="win-controls">
+        <button class="win-btn" onclick="minimizeWindow()" title="Minimize">
+          <svg width="10" height="2" viewBox="0 0 10 2" fill="currentColor"><rect width="10" height="2" rx="1"/></svg>
+        </button>
+        <button class="win-btn" id="btnMaxRestore" onclick="toggleMaximize()" title="Maximize / Restore">
+          <svg id="maxRestoreIcon" width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4">
+            <rect x="1" y="1" width="8" height="8" rx="1"/>
+          </svg>
+        </button>
+        <button class="win-btn close-btn" onclick="closeWindow()" title="Close to Tray">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+            <path d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- Main Viewport -->
   <div class="main-content">
-
-    <!-- Top Status & Target Scope Card -->
-    <div class="card power-card">
-      <div class="top-action-bar">
+    <!-- Top Action Card: Power + Scope + Auto-Watch -->
+    <div class="card top-action-card">
+      <div class="action-bar-row">
         <!-- Power Switch -->
-        <label class="power-switch-container">
-          <div class="cyber-switch">
+        <label class="power-toggle-group">
+          <div class="stitch-switch">
             <input type="checkbox" id="powerSwitch" checked>
-            <span class="cyber-switch-track">
-              <span class="cyber-switch-thumb"></span>
-            </span>
+            <span class="stitch-slider"></span>
           </div>
-          <div class="power-label-box">
-            <div class="power-status-row">
-              <span class="status-indicator-dot" id="powerDot"></span>
-              <span class="power-status-text" id="powerStatusText">LIMITER ACTIVE</span>
-            </div>
-            <span class="power-status-sub" id="powerStatusSub">Zero-Ducking Audio Ceiling Active</span>
-          </div>
+          <span class="power-label">PEAK LIMITER</span>
+          <span class="online-badge" id="powerStatusBadge">ONLINE</span>
+          <!-- Hidden fallback elements for compatibility with scripts -->
+          <span id="powerDot" style="display:none;"></span>
+          <span id="powerStatusText" style="display:none;">LIMITER ACTIVE</span>
+          <span id="powerStatusSub" style="display:none;"></span>
         </label>
 
-        <!-- Auto-Watch Mode Switch -->
-        <label class="auto-watch-box" title="Auto-starts limiter when game opens; auto-stops and restores audio to 100% when game closes">
-          <input type="checkbox" id="autoWatchSwitch" checked onchange="onAutoWatchToggle(this.checked)">
-          <span class="auto-watch-label">⚡ Auto-Game Watcher</span>
-        </label>
-
-        <!-- Scope Pills -->
-        <div class="scope-pills">
-          <button class="scope-btn active" id="btnScopeAuto" onclick="setScope('auto_game')">🎯 Auto Game</button>
-          <button class="scope-btn" id="btnScopeApp" onclick="setScope('specific_app')">🎮 Custom App</button>
-          <button class="scope-btn" id="btnScopeMaster" onclick="setScope('master_device')">🔊 Master</button>
+        <!-- Scope Selector Pills -->
+        <div class="scope-pill-group">
+          <button class="scope-pill-btn active" id="btnScopeAuto" onclick="setScope('auto_game')">Auto-Detect Game</button>
+          <button class="scope-pill-btn" id="btnScopeApp" onclick="setScope('specific_app')">Specific App</button>
+          <button class="scope-pill-btn" id="btnScopeMaster" onclick="setScope('master_device')">Master PC</button>
         </div>
+
+        <!-- Auto-Watch Toggle -->
+        <label class="auto-watch-group" title="Auto-starts limiter when game opens; auto-stops and restores audio when game closes">
+          <span class="auto-watch-text">Auto-Watch</span>
+          <div class="stitch-switch mini">
+            <input type="checkbox" id="autoWatchSwitch" checked onchange="onAutoWatchToggle(this.checked)">
+            <span class="stitch-slider"></span>
+          </div>
+          <span id="autoStatusBadge" style="display:none;"></span>
+          <span id="discordBadge" style="display:none;"></span>
+          <span id="targetBannerText" style="display:none;"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Active Apps Card -->
+    <div class="card active-apps-card">
+      <div class="active-apps-row">
+        <span class="active-apps-label">ACTIVE APPS</span>
+        <div class="monitored-chips-container" id="monitoredChipsList">
+          <!-- Dynamically populated chips -->
+        </div>
+        <button class="btn-add-chip" id="btnAddAppToggle" onclick="toggleAppDrawer()" title="Add game or process">
+          + Add
+        </button>
       </div>
 
-      <!-- Monitored Apps / Background Watcher Drawer -->
-      <div class="custom-app-drawer" id="customAppDrawer">
-        <div class="drawer-header">
-          <span class="drawer-title" id="drawerTitle">MONITORED GAMES (AUTO-TRIGGER APPS):</span>
-          <button class="btn-refresh-procs" onclick="refreshAudioProcesses()" title="Refresh Running Audio Apps">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            Scan Running
-          </button>
-        </div>
-
-        <!-- Chips of actively monitored apps -->
-        <div class="monitored-chips-list" id="monitoredChipsList">
-          <!-- Dynamically populated -->
-        </div>
-
-        <div class="drawer-controls">
-          <select id="processDropdown" class="proc-select">
-            <option value="">-- Select Running Game / Process --</option>
+      <!-- Expandable Add App Drawer -->
+      <div class="app-drawer-collapsible" id="customAppDrawer" style="display: none;">
+        <div class="drawer-inner-row">
+          <select id="processDropdown" class="drawer-select">
+            <option value="">-- Choose Active Audio Game / Process --</option>
           </select>
-          <button class="btn-add-app" onclick="addSelectedProcess()">+ Add App</button>
-          <span class="drawer-or">OR</span>
-          <input type="text" id="customProcessInput" class="proc-input" placeholder="e.g. cs2.exe">
-          <button class="btn-add-app" onclick="addCustomInputProcess()">+ Add</button>
-          <button class="btn-browse-exe" onclick="browseExeFile()" title="Browse for executable on PC">📁 Browse</button>
-        </div>
-      </div>
-
-      <!-- Target Status Banner -->
-      <div class="target-banner">
-        <div class="target-info">
-          <span class="target-bullet" id="targetBullet">●</span>
-          <span id="targetBannerText">Target: Watching for Games</span>
-        </div>
-        <div class="banner-badges">
-          <span class="auto-status-badge" id="autoStatusBadge">⚡ Auto-Watch: Standby</span>
-          <span class="discord-safe-badge" id="discordBadge">🛡️ Discord Safe</span>
+          <button class="drawer-btn" onclick="addSelectedProcess()">Add Selected</button>
+          <span class="drawer-separator">OR</span>
+          <input type="text" id="customProcessInput" class="drawer-input" placeholder="e.g. cs2.exe">
+          <button class="drawer-btn" onclick="addCustomInputProcess()">+ Add .exe</button>
+          <button class="drawer-btn browse" onclick="browseExeFile()">📁 Browse PC</button>
+          <button class="drawer-btn refresh" onclick="refreshAudioProcesses()" title="Refresh running audio apps">🔄 Scan</button>
         </div>
       </div>
     </div>
 
-    <!-- Meter & Visualizer Card -->
+    <!-- Real-Time Peak Metrics Visualizer Card -->
     <div class="card meter-card">
-      <div class="meter-canvas-wrapper">
+      <div class="meter-card-header">
+        <div class="meter-header-left">
+          <span class="meter-title">REAL-TIME PEAK METRICS</span>
+          <span class="meter-lookahead">1.0ms Lookahead</span>
+        </div>
+        <div class="meter-header-right">
+          <span class="phase-dot"></span>
+          <span class="phase-text">Phase Linked</span>
+        </div>
+      </div>
+
+      <div class="meter-canvas-container">
         <canvas id="meterCanvas"></canvas>
       </div>
-      <div class="meter-telemetry-row">
-        <div class="telemetry-item">
-          <span class="telemetry-label">TRUE INPUT PEAK</span>
-          <span class="telemetry-val" id="peakReadout">-∞ dBFS (0%)</span>
+
+      <div class="meter-telemetry-bar">
+        <div class="telemetry-col">
+          <span class="tele-tag">IN:</span>
+          <span class="tele-val in-val" id="peakReadout">-11.8 dB</span>
         </div>
-        <div class="telemetry-item">
-          <span class="telemetry-label">HRTF SPATIAL BALANCE</span>
-          <span class="telemetry-val stereo-safe">Stereo Linked (100% Intact)</span>
+        <div class="telemetry-col center">
+          <span class="tele-tag">GR:</span>
+          <span class="tele-val gr-val" id="grReadout">-4.2 dB</span>
         </div>
-        <div class="telemetry-item" style="align-items: flex-end;">
-          <span class="telemetry-label">ACTIVE GAIN REDUCTION</span>
-          <span class="telemetry-val reduction" id="grReadout">0.0 dB</span>
+        <div class="telemetry-col right">
+          <span class="tele-tag">OUT:</span>
+          <span class="tele-val out-val" id="outReadout">-12.0 dB (CLAMPED)</span>
         </div>
       </div>
     </div>
 
-    <!-- Ceiling Slider Card -->
+    <!-- Loudness Ceiling Card -->
     <div class="card ceiling-card">
-      <div class="slider-group">
-        <div class="slider-header">
-          <div class="slider-title-col">
-            <span class="slider-title">SOUND CEILING (MAXIMUM LOUDNESS LIMIT)</span>
-            <span class="slider-subtitle">Ear-safe threshold — gunshots & red zones clamp silently above this line</span>
-          </div>
-          <span class="slider-readout" id="ceilingReadout">-12.0 dBFS (50%)</span>
+      <div class="ceiling-header">
+        <span class="card-heading">LOUDNESS CEILING</span>
+        <span class="ceiling-readout-badge" id="ceilingReadout">-12.0 dB</span>
+      </div>
+      <div class="slider-wrapper">
+        <input type="range" id="ceilingSlider" min="-30" max="0" step="0.5" value="-12" class="slider-crimson">
+      </div>
+      <div class="ceiling-footer-row">
+        <div class="quick-pills-row">
+          <button class="quick-pill" id="btnCeil_6" onclick="setCeilingDb(-6)">-6 dB</button>
+          <button class="quick-pill active" id="btnCeil_12" onclick="setCeilingDb(-12)">-12 dB</button>
+          <button class="quick-pill" id="btnCeil_18" onclick="setCeilingDb(-18)">-18 dB</button>
+          <button class="quick-pill" id="btnCeil_24" onclick="setCeilingDb(-24)">-24 dB</button>
         </div>
-        <div class="slider-container">
-          <input type="range" id="ceilingSlider" min="-30" max="0" step="0.5" value="-12">
+        <span class="limiter-curve-note" id="curveNoteText">Brickwall Limiter (∞:1)</span>
+      </div>
+    </div>
+
+    <!-- Two-Column Dynamics & Footstep Recovery Card Grid -->
+    <div class="two-col-grid">
+      <!-- Dynamics Mode -->
+      <div class="card dynamics-col-card">
+        <div class="col-card-header">
+          <span class="card-heading">DYNAMICS MODE</span>
+          <span class="dynamics-ratio-badge" id="dynamicsRatioBadge">4:1 RATIO</span>
         </div>
-        <div class="quick-jump-row">
-          <span class="quick-jump-label">QUICK CEILING PRESETS:</span>
-          <button class="quick-btn" id="btnCeil_6" data-db="-6" onclick="setCeilingDb(-6)">-6 dB (Gentle)</button>
-          <button class="quick-btn" id="btnCeil_12" data-db="-12" onclick="setCeilingDb(-12)">-12 dB (PUBG/FPS)</button>
-          <button class="quick-btn" id="btnCeil_18" data-db="-18" onclick="setCeilingDb(-18)">-18 dB (Quiet)</button>
-          <button class="quick-btn" id="btnCeil_24" data-db="-24" onclick="setCeilingDb(-24)">-24 dB (Late Night)</button>
+        <div class="segmented-pill-switch">
+          <button class="seg-btn active" id="kneeSoftBtn" onclick="setKneeMode('soft_knee')">Soft-Knee (4:1)</button>
+          <button class="seg-btn" id="kneeBrickBtn" onclick="setKneeMode('brickwall')">Brickwall (∞:1)</button>
+          <input type="checkbox" id="kneeSwitch" checked style="display:none;">
+        </div>
+      </div>
+
+      <!-- Footstep Recovery -->
+      <div class="card recovery-col-card">
+        <div class="col-card-header">
+          <span class="card-heading">FOOTSTEP RECOVERY</span>
+          <span class="recovery-readout-badge" id="releaseNum">120 ms</span>
+        </div>
+        <div class="slider-wrapper mini">
+          <input type="range" id="releaseSlider" min="50" max="600" step="10" value="120" class="slider-cyan">
+        </div>
+        <div class="recovery-tags-row">
+          <button class="rec-tag" id="btnRel_50" onclick="setReleaseMs(50)">50ms</button>
+          <button class="rec-tag active" id="btnRel_120" onclick="setReleaseMs(120)">120ms</button>
+          <button class="rec-tag" id="btnRel_300" onclick="setReleaseMs(300)">300ms</button>
         </div>
       </div>
     </div>
 
-    <!-- Dynamics & Distance Preservation Card -->
-    <div class="card dynamics-card">
-      <div class="dynamics-grid">
-        <!-- Soft-Knee Distance Preservation Switch -->
-        <label class="distance-switch-box">
-          <div class="cyber-switch">
-            <input type="checkbox" id="kneeSwitch" checked>
-            <span class="cyber-switch-track">
-              <span class="cyber-switch-thumb"></span>
-            </span>
-          </div>
-          <div class="distance-desc">
-            <span class="distance-title">Preserve 30m vs 150m Distance Cues</span>
-            <span class="distance-sub">Soft-Knee 4:1 curve prevents distant sniper shots from sounding right next to you</span>
-          </div>
-        </label>
-
-        <!-- Footstep Recovery Control -->
-        <div class="release-control-box">
-          <div class="release-header">
-            <span class="distance-title">Footstep Recovery</span>
-            <span class="release-num" id="releaseNum">120 ms</span>
-          </div>
-          <div class="slider-container">
-            <input type="range" id="releaseSlider" min="50" max="600" step="10" value="120">
-          </div>
-          <div class="release-sub-row">
-            <span class="quick-rel-btn" onclick="setReleaseMs(80)" title="Set to 80ms (Fast)">Fast (80ms)</span>
-            <span class="quick-rel-btn" onclick="setReleaseMs(120)" title="Set to 120ms (Balanced)">Balanced (120ms)</span>
-            <span class="quick-rel-btn" onclick="setReleaseMs(300)" title="Set to 300ms (Smooth)">Smooth (300ms)</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- In-App Donation Banner Card -->
-    <div class="card donate-card">
-      <div class="donate-card-left">
-        <div class="donate-cup-icon">☕</div>
-        <div class="donate-info-col">
-          <span class="donate-title">Support AudioClamp Development</span>
-          <span class="donate-desc">Free & Open-Source. Support future esports calibrations, profiles & updates!</span>
-        </div>
-      </div>
-      <button class="btn-donate-card" onclick="openDonationLink()" title="Open Ko-fi support page">
-        💖 Donate on Ko-fi
-      </button>
-    </div>
-
-    <!-- Quick Profiles Grid -->
+    <!-- Competitive Profiles Grid Card -->
     <div class="card profiles-card">
-      <div class="profiles-header">
-        <span>COMPETITIVE ESPORTS & MEDIA PROFILES</span>
-        <span class="profiles-sub">Instant 1-Click Calibration</span>
+      <div class="profiles-header-row">
+        <span class="card-heading">COMPETITIVE PROFILES</span>
+        <button class="btn-new-profile" onclick="showToast('Profile configuration saved', 'success')">+ New Profile</button>
       </div>
-      <div class="profiles-grid">
-        <div class="profile-card active" data-profile="PUBG: BATTLEGROUNDS" onclick="applyProfile('PUBG: BATTLEGROUNDS')">
-          <span class="profile-name">PUBG</span>
-          <span class="profile-stats">-12 dB • 120ms</span>
+      <div class="profiles-grid-4x2">
+        <div class="profile-item active" data-profile="PUBG: BATTLEGROUNDS" onclick="applyProfile('PUBG: BATTLEGROUNDS')">
+          <div class="prof-top-row">
+            <span class="prof-name">PUBG</span>
+            <span class="prof-dot">●</span>
+          </div>
+          <div class="prof-stats-row">
+            <span class="prof-db">-12 dB</span>
+            <span class="prof-ms">120ms</span>
+          </div>
         </div>
-        <div class="profile-card" data-profile="Escape from Tarkov" onclick="applyProfile('Escape from Tarkov')">
-          <span class="profile-name">Tarkov</span>
-          <span class="profile-stats">-10 dB • 100ms</span>
+        <div class="profile-item" data-profile="Counter-Strike 2" onclick="applyProfile('Counter-Strike 2')">
+          <div class="prof-top-row">
+            <span class="prof-name">CS2</span>
+            <span class="prof-dot"></span>
+          </div>
+          <div class="prof-stats-row">
+            <span class="prof-db">-8 dB</span>
+            <span class="prof-ms">80ms</span>
+          </div>
         </div>
-        <div class="profile-card" data-profile="Counter-Strike 2" onclick="applyProfile('Counter-Strike 2')">
-          <span class="profile-name">CS2</span>
-          <span class="profile-stats">-8 dB • 80ms</span>
+        <div class="profile-item" data-profile="Escape from Tarkov" onclick="applyProfile('Escape from Tarkov')">
+          <div class="prof-top-row">
+            <span class="prof-name">Tarkov</span>
+            <span class="prof-dot"></span>
+          </div>
+          <div class="prof-stats-row">
+            <span class="prof-db">-10 dB</span>
+            <span class="prof-ms">100ms</span>
+          </div>
         </div>
-        <div class="profile-card" data-profile="Call of Duty / Warzone" onclick="applyProfile('Call of Duty / Warzone')">
-          <span class="profile-name">Warzone</span>
-          <span class="profile-stats">-14 dB • 150ms</span>
+        <div class="profile-item" data-profile="Call of Duty / Warzone" onclick="applyProfile('Call of Duty / Warzone')">
+          <div class="prof-top-row">
+            <span class="prof-name">Warzone</span>
+            <span class="prof-dot"></span>
+          </div>
+          <div class="prof-stats-row">
+            <span class="prof-db">-14 dB</span>
+            <span class="prof-ms">150ms</span>
+          </div>
         </div>
-        <div class="profile-card" data-profile="Valorant" onclick="applyProfile('Valorant')">
-          <span class="profile-name">Valorant</span>
-          <span class="profile-stats">-9 dB • 90ms</span>
+        <div class="profile-item" data-profile="Valorant" onclick="applyProfile('Valorant')">
+          <div class="prof-top-row">
+            <span class="prof-name">Valorant</span>
+            <span class="prof-dot"></span>
+          </div>
+          <div class="prof-stats-row">
+            <span class="prof-db">-9 dB</span>
+            <span class="prof-ms">90ms</span>
+          </div>
         </div>
-        <div class="profile-card" data-profile="Apex Legends" onclick="applyProfile('Apex Legends')">
-          <span class="profile-name">Apex</span>
-          <span class="profile-stats">-11 dB • 130ms</span>
+        <div class="profile-item" data-profile="Apex Legends" onclick="applyProfile('Apex Legends')">
+          <div class="prof-top-row">
+            <span class="prof-name">Apex</span>
+            <span class="prof-dot"></span>
+          </div>
+          <div class="prof-stats-row">
+            <span class="prof-db">-11 dB</span>
+            <span class="prof-ms">130ms</span>
+          </div>
         </div>
-        <div class="profile-card" data-profile="Cinema / Movie Night" onclick="applyProfile('Cinema / Movie Night')">
-          <span class="profile-name">Cinema</span>
-          <span class="profile-stats">-15 dB • 600ms</span>
+        <div class="profile-item" data-profile="Cinema / Movie Night" onclick="applyProfile('Cinema / Movie Night')">
+          <div class="prof-top-row">
+            <span class="prof-name">Cinema</span>
+            <span class="prof-dot"></span>
+          </div>
+          <div class="prof-stats-row">
+            <span class="prof-db">-15 dB</span>
+            <span class="prof-ms">600ms</span>
+          </div>
         </div>
-        <div class="profile-card" data-profile="Late Night (Whisper)" onclick="applyProfile('Late Night (Whisper)')">
-          <span class="profile-name">Late Night</span>
-          <span class="profile-stats">-20 dB • 800ms</span>
+        <div class="profile-item" data-profile="Late Night (Whisper)" onclick="applyProfile('Late Night (Whisper)')">
+          <div class="prof-top-row">
+            <span class="prof-name">Late Night</span>
+            <span class="prof-dot"></span>
+          </div>
+          <div class="prof-stats-row">
+            <span class="prof-db">-20 dB</span>
+            <span class="prof-ms">800ms</span>
+          </div>
         </div>
       </div>
     </div>
-
   </div>
 
-  <!-- Bottom Emergency & Hotkey Footer -->
+  <!-- Footer Bar -->
   <div class="footer-bar">
-    <button class="btn-emergency" onclick="emergencyReset()">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    <button class="btn-panic-reset" onclick="emergencyReset()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
       </svg>
-      Emergency Reset
+      Panic Reset
     </button>
-    <div class="footer-center">
-      <label class="autostart-toggle" title="Run AudioClamp silently in the background tray when Windows boots">
-        <input type="checkbox" id="autoStartSwitch" onchange="toggleAutoStart(this.checked)">
-        <span>Run on Windows Boot</span>
-      </label>
-      <button class="btn-kofi" onclick="openDonationLink()" title="Support the developer on Ko-fi">
-        ☕ Buy Me a Coffee
-      </button>
-    </div>
-    <div class="footer-hotkeys">
-      <span>Toggle: <kbd class="hotkey-kbd">Ctrl+Alt+L</kbd></span>
-      <span>Reset: <kbd class="hotkey-kbd">Ctrl+Alt+R</kbd></span>
+    <label class="startup-checkbox-label" title="Run silently in the background tray on Windows boot">
+      <input type="checkbox" id="autoStartSwitch" onchange="toggleAutoStart(this.checked)">
+      <span class="custom-checkbox"></span>
+      <span class="startup-text">Launch on Startup</span>
+    </label>
+    <div class="hotkey-display">
+      <span class="hotkey-label">Hotkey:</span>
+      <kbd class="hotkey-badge">[Ctrl+Alt+L]</kbd>
     </div>
   </div>
 
