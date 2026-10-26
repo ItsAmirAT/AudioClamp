@@ -207,7 +207,15 @@
     <div class="card profiles-card">
       <div class="profiles-header-row">
         <span class="card-heading">COMPETITIVE PROFILES</span>
-        <button class="btn-new-profile" onclick="showToast('Profile configuration saved', 'success')">+ New Profile</button>
+        <button class="btn-new-profile" onclick="toggleNewProfileDrawer()">+ New Profile</button>
+      </div>
+      <!-- Collapsible Profile Creator Drawer -->
+      <div class="app-drawer-collapsible" id="profileDrawer" style="display: none; margin-bottom: 12px;">
+        <div class="drawer-inner-row">
+          <input type="text" id="newProfileNameInput" class="drawer-input" placeholder="Profile name (e.g. Apex Legends)" style="max-width: 260px;" onkeydown="if(event.key==='Enter') saveCustomProfile()">
+          <button class="drawer-btn" onclick="saveCustomProfile()">Save Current Settings</button>
+          <button class="drawer-btn" onclick="toggleNewProfileDrawer(false)" style="background: rgba(255,255,255,0.06); color: var(--text-muted);">Cancel</button>
+        </div>
       </div>
       <div class="profiles-grid-4x2">
         <div class="profile-item active" data-profile="PUBG: BATTLEGROUNDS" onclick="applyProfile('PUBG: BATTLEGROUNDS')">

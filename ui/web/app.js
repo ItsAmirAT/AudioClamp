@@ -11,6 +11,7 @@ let state = {
   active_target: "Master Audio",
   is_game_isolated: false,
   peak: 0.0,
+  output_peak: 0.0,
   channel_peaks: [0.0, 0.0],
   gain_reduction_db: 0.0,
   applied_vol: 0.5,
@@ -99,7 +100,7 @@ function renderMeter(now) {
     return dbToY(db);
   }
 
-  // 1. Subtle acoustic background grid lines
+  // 1. Subtle acoustic background grid
   ctx.strokeStyle = "rgba(255, 255, 255, 0.025)";
   ctx.lineWidth = 1;
   const gridStepX = Math.round(availW / 8);
@@ -110,7 +111,7 @@ function renderMeter(now) {
     ctx.stroke();
   }
 
-  // 2. Horizontal decibel ticks on the left with Google Stitch color accents
+  // 2. Horizontal decibel ticks on the left with color coding
   const dbTicks = [
     { db: 0, color: "#ff2a5f" },
     { db: -6, color: "#f59e0b" },
@@ -260,24 +261,30 @@ function renderMeter(now) {
   const grText = smoothGR > 0.1 ? `-${smoothGR.toFixed(1)} dB` : "-0.0 dB";
   ctx.fillText(`GR  ${grText}`, grX + grW / 2, padTop + 14);
 
-  // Stacked horizontal attenuation LED bars
+  // Stacked horizontal attenuation LED bars (3-tier calibrated thresholds)
   const numGrBars = 3;
   const grBarW = grW - 16;
   const grBarH = 7;
   const grBarGap = 5;
-  const grBarsStartY = padTop + 24;
-
-  const grIntensity = Math.min(1.0, smoothGR / 12.0);
-  const litBars = Math.round(grIntensity * numGrBars);
+  const grBarsStartY = padTop + 26;
+  const barThresholds = [0.3, 3.0, 6.0];
 
   for (let b = 0; b < numGrBars; b++) {
     const by = grBarsStartY + b * (grBarH + grBarGap);
-    const isBarLit = (b + 1) <= litBars || (smoothGR > 0.4 && b === 0);
+    const isBarLit = smoothGR >= barThresholds[b];
 
     if (isBarLit) {
       const barGrad = ctx.createLinearGradient(grX + 8, 0, grX + 8 + grBarW, 0);
-      barGrad.addColorStop(0, "#f59e0b");
-      barGrad.addColorStop(1, "#ff2a5f");
+      if (b === 0) {
+        barGrad.addColorStop(0, "#f59e0b");
+        barGrad.addColorStop(1, "#f59e0b");
+      } else if (b === 1) {
+        barGrad.addColorStop(0, "#f59e0b");
+        barGrad.addColorStop(1, "#ff4d79");
+      } else {
+        barGrad.addColorStop(0, "#ff2a5f");
+        barGrad.addColorStop(1, "#ff2a5f");
+      }
       ctx.fillStyle = barGrad;
     } else {
       ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
@@ -447,7 +454,6 @@ function setReleaseMs(ms) {
     readout.innerText = `${val} ms`;
   }
 
-  // Update quick release tag active states
   const tags = [
     { id: "btnRel_50", val: 50 },
     { id: "btnRel_120", val: 120 },
@@ -734,6 +740,62 @@ function applyProfile(profileName) {
   }
 }
 
+function toggleNewProfileDrawer(forceState) {
+  const drawer = document.getElementById("profileDrawer");
+  if (!drawer) return;
+  const isCurrentlyOpen = drawer.style.display !== "none";
+  const shouldOpen = forceState !== undefined ? forceState : !isCurrentlyOpen;
+  drawer.style.display = shouldOpen ? "block" : "none";
+  if (shouldOpen) {
+    const input = document.getElementById("newProfileNameInput");
+    if (input) {
+      input.value = "";
+      input.focus();
+    }
+  }
+}
+
+function saveCustomProfile() {
+  const input = document.getElementById("newProfileNameInput");
+  if (!input) return;
+  const rawName = input.value.trim();
+  if (!rawName) {
+    showToast("Please enter a profile name", "warning");
+    return;
+  }
+  const cleanName = rawName;
+
+  const grid = document.querySelector(".profiles-grid-4x2");
+  if (!grid) return;
+
+  // Check if profile item already exists
+  let existingItem = grid.querySelector(`[data-profile="${cleanName}"]`);
+  if (!existingItem) {
+    const item = document.createElement("div");
+    item.className = "profile-item active";
+    item.setAttribute("data-profile", cleanName);
+    item.onclick = () => {
+      applyProfile(cleanName);
+    };
+
+    const topRow = document.createElement("div");
+    topRow.className = "prof-top-row";
+    topRow.innerHTML = `<span class="prof-name">${cleanName}</span><span class="prof-dot">●</span>`;
+
+    const statsRow = document.createElement("div");
+    statsRow.className = "prof-stats-row";
+    statsRow.innerHTML = `<span class="prof-db">${state.threshold_db.toFixed(0)} dB</span><span class="prof-ms">${state.release_ms}ms</span>`;
+
+    item.appendChild(topRow);
+    item.appendChild(statsRow);
+    grid.appendChild(item);
+  }
+
+  toggleNewProfileDrawer(false);
+  highlightProfileCard(cleanName);
+  showToast(`Custom profile saved: ${cleanName}`, "success");
+}
+
 function emergencyReset() {
   updateCeiling(0.0);
   showToast("Panic Reset: Volume Ceiling set to 100% (0 dB)", "warning");
@@ -778,10 +840,17 @@ function openDonationLink() {
 
 window.receiveTelemetry = function(data) {
   state.peak = data.peak || 0.0;
+  state.output_peak = data.output_peak ?? (data.peak || 0.0);
   state.channel_peaks = data.channel_peaks || [state.peak, state.peak];
   state.gain_reduction_db = data.gain_reduction_db || 0.0;
   state.is_app_running = data.is_app_running ?? true;
   state.auto_watch_status = data.auto_watch_status || "";
+
+  // Real-time sub-millisecond polling latency readout in titlebar
+  const latencyText = document.querySelector(".latency-text");
+  if (latencyText && data.poll_latency_ms !== undefined) {
+    latencyText.innerText = `Active · ${data.poll_latency_ms.toFixed(2)}ms latency`;
+  }
 
   if (state.active_target !== data.active_target || state.is_game_isolated !== data.is_game_isolated) {
     state.active_target = data.active_target || "Master Audio";
@@ -793,22 +862,36 @@ window.receiveTelemetry = function(data) {
   if (now - lastTextUpdateTime > 50) {
     lastTextUpdateTime = now;
 
-    const pkDb = 20.0 * Math.log10(Math.max(0.0001, state.peak));
+    const isSilent = state.peak <= 0.0001;
+    const pkDb = isSilent ? -80.0 : 20.0 * Math.log10(state.peak);
+    const grVal = Math.abs(state.gain_reduction_db);
+
     const pkReadout = document.getElementById("peakReadout");
     if (pkReadout) {
-      pkReadout.innerText = `${pkDb.toFixed(1)} dB`;
+      pkReadout.innerText = isSilent ? "-∞ dB" : `${pkDb.toFixed(1)} dB`;
     }
 
     const grReadout = document.getElementById("grReadout");
     if (grReadout) {
-      const grVal = Math.abs(state.gain_reduction_db);
       grReadout.innerText = grVal > 0.1 ? `-${grVal.toFixed(1)} dB` : "-0.0 dB";
     }
 
     const outReadout = document.getElementById("outReadout");
     if (outReadout) {
-      const outDb = Math.min(state.threshold_db, pkDb);
-      outReadout.innerText = `${outDb.toFixed(1)} dB (CLAMPED)`;
+      if (isSilent) {
+        outReadout.innerText = "-∞ dB (CLEAN)";
+        outReadout.style.color = "var(--text-muted)";
+        outReadout.style.textShadow = "none";
+      } else if (grVal > 0.1) {
+        const clampedDb = Math.min(state.threshold_db, pkDb);
+        outReadout.innerText = `${clampedDb.toFixed(1)} dB (CLAMPED)`;
+        outReadout.style.color = "var(--accent-cyan)";
+        outReadout.style.textShadow = "0 0 6px var(--accent-cyan-glow)";
+      } else {
+        outReadout.innerText = `${pkDb.toFixed(1)} dB (CLEAN)`;
+        outReadout.style.color = "var(--accent-emerald)";
+        outReadout.style.textShadow = "0 0 6px var(--accent-emerald-glow)";
+      }
     }
   }
 };
@@ -981,4 +1064,34 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
+  // Keyboard shortcut routing
+  window.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" && e.target.type === "text") return;
+
+    if (e.ctrlKey && e.altKey && (e.key === "l" || e.key === "L")) {
+      e.preventDefault();
+      const pSwitch = document.getElementById("powerSwitch");
+      if (pSwitch) {
+        pSwitch.checked = !pSwitch.checked;
+        pSwitch.dispatchEvent(new Event("change"));
+      }
+    }
+
+    if (e.ctrlKey && e.altKey && (e.key === "r" || e.key === "R")) {
+      e.preventDefault();
+      emergencyReset();
+    }
+
+    if (e.key === "Escape") {
+      const drawer = document.getElementById("customAppDrawer");
+      if (drawer && drawer.style.display !== "none") {
+        drawer.style.display = "none";
+      }
+      const profDrawer = document.getElementById("profileDrawer");
+      if (profDrawer && profDrawer.style.display !== "none") {
+        profDrawer.style.display = "none";
+      }
+    }
+  });
 });

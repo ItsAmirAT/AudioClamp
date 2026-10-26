@@ -173,6 +173,11 @@ class AudioEngine:
 
         def init_master_device():
             nonlocal device, vol_endpoint, master_meter, callback_handler, callback_ptr, peaks_buffer
+            if vol_endpoint and callback_ptr:
+                try:
+                    vol_endpoint.UnregisterControlChangeNotify(callback_ptr)
+                except Exception:
+                    pass
             device = AudioUtilities.GetSpeakers()
             if not device:
                 return False
@@ -359,11 +364,15 @@ class AudioEngine:
                 try:
                     if self.is_session_mode and target_session_meters:
                         session_peaks = []
-                        for m in target_session_meters:
+                        for m in list(target_session_meters):
                             try:
                                 session_peaks.append(float(m.GetPeakValue()))
                             except Exception:
-                                pass
+                                try:
+                                    target_session_meters.remove(m)
+                                except ValueError:
+                                    pass
+                                self._force_rescan = True
                         raw_peak = max(session_peaks) if session_peaks else 0.0
                         raw_ch_peaks = [raw_peak, raw_peak]
                     elif master_meter:
@@ -395,7 +404,8 @@ class AudioEngine:
                     )
 
                     if target_att < self.current_attenuation_factor:
-                        tau_attack = 0.004
+                        overshoot_db = -gr_db
+                        tau_attack = 0.0010 if overshoot_db > 6.0 else 0.0025
                         alpha_att = math.exp(-dt / tau_attack)
                         self.current_attenuation_factor = (
                             self.current_attenuation_factor * alpha_att + target_att * (1.0 - alpha_att)
@@ -449,23 +459,26 @@ class AudioEngine:
                     pass
 
                 # 5. Telemetry
+                elapsed = time.perf_counter() - now
                 if self.telemetry_callback:
+                    output_peak = self.latest_peak * self.current_attenuation_factor
                     data = {
                         "peak": self.latest_peak,
+                        "output_peak": output_peak,
                         "channel_peaks": self.latest_channel_peaks,
                         "gain_reduction_db": self.gain_reduction_db,
                         "active_target": self.active_session_name,
                         "is_game_isolated": self.is_session_mode,
                         "is_limiting": self.is_limiting,
                         "is_app_running": self.is_app_running,
-                        "auto_watch_status": self.auto_watch_status
+                        "auto_watch_status": self.auto_watch_status,
+                        "poll_latency_ms": round(elapsed * 1000.0, 2)
                     }
                     try:
                         self.telemetry_callback(data)
                     except Exception:
                         pass
 
-                elapsed = time.perf_counter() - now
                 sleep_time = tick_interval - elapsed
                 if sleep_time > 0:
                     time.sleep(sleep_time)
@@ -485,5 +498,4 @@ class AudioEngine:
                             pass
             except Exception:
                 pass
-            CoUninitialize()
             CoUninitialize()
