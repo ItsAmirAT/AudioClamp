@@ -65,7 +65,7 @@ class AudioEngine:
         self.gain_reduction_db: float = 0.0
         self.is_limiting: bool = False
         self.hold_timer: float = 0.0
-        self.hold_time_sec: float = 0.040 # 40ms hold prevents gain chatter during full-auto sprays
+        self.hold_time_sec: float = 0.095 # 95ms hold prevents gain flutter during full-auto fire and captures acoustic reflections
         self._force_rescan: bool = False
 
         self.latest_peak: float = 0.0
@@ -449,13 +449,8 @@ class AudioEngine:
                 if self.config.get("stereo_linked", True) and len(raw_ch_peaks) >= 2:
                     raw_peak = max(raw_ch_peaks[0], raw_ch_peaks[1])
 
-                if self.is_session_mode:
-                    input_peak = min(2.0, raw_peak)
-                    input_ch_peaks = [min(2.0, p) for p in raw_ch_peaks]
-                else:
-                    norm = max(0.01, self.current_attenuation_factor)
-                    input_peak = min(2.0, raw_peak / norm)
-                    input_ch_peaks = [min(2.0, p / norm) for p in raw_ch_peaks]
+                input_peak = min(2.0, raw_peak)
+                input_ch_peaks = [min(2.0, p) for p in raw_ch_peaks]
 
                 self.latest_peak = input_peak
                 self.latest_channel_peaks = input_ch_peaks
@@ -469,25 +464,28 @@ class AudioEngine:
                     peak_delta = input_peak - prev_peak
                     peak_deriv = peak_delta / max(0.0005, dt)
                     is_steep_transient = (peak_deriv > 18.0 and input_peak > 0.10)
+                    overshoot_db = -gr_db
 
                     if target_att < self.current_attenuation_factor or is_steep_transient:
-                        overshoot_db = -gr_db
                         loud_event_duration += dt
-                        tau_attack = 0.0004 if (is_steep_transient or overshoot_db > 6.0) else 0.0020
+                        # Ultra-fast transient attack (0.4ms) captures the very first gunshot wavefront
+                        tau_attack = 0.0004 if (is_steep_transient or overshoot_db > 5.0) else 0.0020
                         alpha_att = math.exp(-dt / tau_attack)
                         self.current_attenuation_factor = (
                             self.current_attenuation_factor * alpha_att + target_att * (1.0 - alpha_att)
                         )
-                        self.hold_timer = self.hold_time_sec
+                        # Gunshots have acoustic room/valley reverb tails that last 80-250ms.
+                        # Holding the attenuation through the shot and early reflection tail prevents the tail from surging up (which causes fake echoes).
+                        shot_hold = 0.120 if (is_steep_transient or overshoot_db > 4.0) else self.hold_time_sec
+                        self.hold_timer = max(self.hold_timer, shot_hold)
                         self.is_limiting = True
                     else:
                         if self.hold_timer > 0.0:
                             self.hold_timer -= dt
                         else:
-                            if loud_event_duration < 0.065:
-                                tau_rel = max(0.035, min(release_ms / 1000.0, 0.050))
-                            else:
-                                tau_rel = release_ms / 1000.0
+                            # Smooth natural release: never recover faster than 100ms on gunshot decays.
+                            # This allows environmental reverb to die down naturally without pumping or artificial echo surges.
+                            tau_rel = max(0.100, release_ms / 1000.0)
                             alpha_rel = math.exp(-dt / tau_rel)
                             self.current_attenuation_factor = (
                                 self.current_attenuation_factor * alpha_rel + target_att * (1.0 - alpha_rel)
@@ -502,7 +500,7 @@ class AudioEngine:
                     if self.hold_timer > 0.0:
                         self.hold_timer -= dt
                     else:
-                        tau_rel = release_ms / 1000.0
+                        tau_rel = max(0.100, release_ms / 1000.0)
                         alpha_rel = math.exp(-dt / tau_rel)
                         self.current_attenuation_factor = (
                             self.current_attenuation_factor * alpha_rel + 1.0 * (1.0 - alpha_rel)
