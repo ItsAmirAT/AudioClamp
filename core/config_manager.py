@@ -12,21 +12,21 @@ GAME_PROFILES: Dict[str, Dict[str, Any]] = {
         "exe_names": ["TslGame.exe"],
         "threshold_db": -12.0,
         "knee_mode": "soft_knee",
-        "knee_width_db": 2.5,
-        "compression_ratio": 12.0,
+        "knee_width_db": 5.0,
+        "compression_ratio": 4.0,
         "attack_ms": 1,
-        "release_ms": 140,
+        "release_ms": 130,
         "stereo_linked": True,
-        "description": "Reduces loud gunfire spikes while preserving natural acoustic reverb decay without echoes."
+        "description": "Reduces loud gunfire spikes while preserving natural acoustic reverb decay without echoes or merging."
     },
     "Escape from Tarkov": {
         "exe_names": ["EscapeFromTarkov.exe", "EscapeFromTarkov_BE.exe"],
         "threshold_db": -10.0,
         "knee_mode": "soft_knee",
-        "knee_width_db": 2.5,
-        "compression_ratio": 10.0,
+        "knee_width_db": 5.0,
+        "compression_ratio": 4.0,
         "attack_ms": 1,
-        "release_ms": 130,
+        "release_ms": 120,
         "stereo_linked": True,
         "description": "Protects against sudden grenade concussions and close fire without reverb pumping."
     },

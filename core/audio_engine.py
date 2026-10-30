@@ -75,7 +75,7 @@ class AudioEngine:
         self.gain_reduction_db: float = 0.0
         self.is_limiting: bool = False
         self.hold_timer: float = 0.0
-        self.hold_time_sec: float = 0.095 # 95ms hold prevents gain flutter during full-auto fire and captures acoustic reflections
+        self.hold_time_sec: float = 0.030 # 30ms hold covers blast transients without merging overlapping sounds
         self.active_device_name: str = "Default Audio Output"
         self._device_changed: bool = False
         self._force_rescan: bool = False
@@ -509,26 +509,26 @@ class AudioEngine:
                     is_steep_transient = (peak_deriv > 18.0 and input_peak > 0.10)
                     overshoot_db = -gr_db
 
-                    if target_att < self.current_attenuation_factor or is_steep_transient:
+                    # Attack phase: ONLY engage when we need MORE attenuation (gain moving downwards)
+                    if target_att < self.current_attenuation_factor:
                         loud_event_duration += dt
                         # Ultra-fast transient attack (0.4ms) captures the very first gunshot wavefront
-                        tau_attack = 0.0004 if (is_steep_transient or overshoot_db > 5.0) else 0.0020
+                        tau_attack = 0.0004 if (is_steep_transient or overshoot_db > 5.0) else 0.0015
                         alpha_att = math.exp(-dt / tau_attack)
                         self.current_attenuation_factor = (
                             self.current_attenuation_factor * alpha_att + target_att * (1.0 - alpha_att)
                         )
-                        # Gunshots have acoustic room/valley reverb tails that last 80-250ms.
-                        # Holding the attenuation through the shot and early reflection tail prevents the tail from surging up (which causes fake echoes).
-                        shot_hold = 0.120 if (is_steep_transient or overshoot_db > 4.0) else self.hold_time_sec
-                        self.hold_timer = max(self.hold_timer, shot_hold)
+                        # Adaptive hold: 25ms to 35ms hold covers the immediate blast and gunshot crack without freezing out subsequent bullets or overlapping sounds
+                        hold_duration = max(0.025, min(0.038, release_ms / 3500.0))
+                        self.hold_timer = hold_duration
                         self.is_limiting = True
                     else:
+                        # Release / Hold phase: smoothly recover without sudden jumps or disruptive pops
                         if self.hold_timer > 0.0:
                             self.hold_timer -= dt
                         else:
-                            # Smooth natural release: never recover faster than 100ms on gunshot decays.
-                            # This allows environmental reverb to die down naturally without pumping or unnatural echo surges.
-                            tau_rel = max(0.100, release_ms / 1000.0)
+                            # Smooth natural release: exponential recovery prevents echo surges while restoring full separation
+                            tau_rel = max(0.040, release_ms / 1000.0)
                             alpha_rel = math.exp(-dt / tau_rel)
                             self.current_attenuation_factor = (
                                 self.current_attenuation_factor * alpha_rel + target_att * (1.0 - alpha_rel)
@@ -543,7 +543,7 @@ class AudioEngine:
                     if self.hold_timer > 0.0:
                         self.hold_timer -= dt
                     else:
-                        tau_rel = max(0.100, release_ms / 1000.0)
+                        tau_rel = max(0.040, release_ms / 1000.0)
                         alpha_rel = math.exp(-dt / tau_rel)
                         self.current_attenuation_factor = (
                             self.current_attenuation_factor * alpha_rel + 1.0 * (1.0 - alpha_rel)

@@ -35,7 +35,14 @@ class WebviewApi:
         return getattr(self._app.engine, "active_device_name", "Default Audio Endpoint")
 
     def set_knee_mode(self, mode):
-        self._app.config.set("knee_mode", str(mode))
+        m = str(mode)
+        self._app.config.set("knee_mode", m)
+        if m == "soft_knee":
+            self._app.config.set("compression_ratio", 4.0)
+            self._app.config.set("knee_width_db", 5.0)
+        elif m == "brickwall":
+            self._app.config.set("compression_ratio", 50.0)
+            self._app.config.set("knee_width_db", 0.5)
 
     def set_release_ms(self, ms):
         self._app.config.set("release_ms", float(ms))
