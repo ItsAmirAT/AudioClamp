@@ -34,6 +34,12 @@ class WebviewApi:
     def get_active_device(self):
         return getattr(self._app.engine, "active_device_name", "Default Audio Endpoint")
 
+    def get_audio_devices(self):
+        return self._app.engine.get_playback_devices()
+
+    def set_default_device(self, device_id):
+        return self._app.engine.set_default_playback_device(str(device_id))
+
     def set_knee_mode(self, mode):
         m = str(mode)
         self._app.config.set("knee_mode", m)

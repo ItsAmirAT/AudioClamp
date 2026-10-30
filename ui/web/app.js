@@ -916,6 +916,133 @@ function formatCleanDeviceName(rawName) {
   return clean || "Audio Output";
 }
 
+// ==========================================
+// Interactive Audio Output Device Quick-Switcher
+// ==========================================
+
+let isDeviceMenuOpen = false;
+
+function getDeviceIcon(rawName) {
+  const n = (rawName || "").toLowerCase();
+  if (n.includes("headphone") || n.includes("headset") || n.includes("iem") || n.includes("earphone") || n.includes("hyperx") || n.includes("arctis") || n.includes("cloud")) {
+    return "🎧";
+  }
+  if (n.includes("xg27") || n.includes("vg32") || n.includes("nvidia") || n.includes("monitor") || n.includes("display") || n.includes("hdmi") || n.includes("tv") || n.includes("asus") || n.includes("benq") || n.includes("lg")) {
+    return "🖥️";
+  }
+  return "🔊";
+}
+
+async function toggleDeviceMenu(event) {
+  if (event) event.stopPropagation();
+  if (isDeviceMenuOpen) {
+    closeDeviceMenu();
+  } else {
+    await openDeviceMenu();
+  }
+}
+
+async function openDeviceMenu() {
+  const popover = document.getElementById("deviceMenuPopover");
+  const tag = document.getElementById("statusDeviceTag");
+  if (!popover || !tag) return;
+
+  isDeviceMenuOpen = true;
+  tag.classList.add("open");
+  popover.style.display = "block";
+
+  const listEl = document.getElementById("deviceMenuList");
+  if (listEl) {
+    listEl.innerHTML = `<div style="padding: 12px; font-size: 11px; color: var(--text-muted); text-align: center;">Scanning playback devices...</div>`;
+  }
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.get_audio_devices) {
+    try {
+      const devices = await window.pywebview.api.get_audio_devices();
+      renderDeviceMenu(devices || []);
+    } catch (err) {
+      if (listEl) {
+        listEl.innerHTML = `<div style="padding: 12px; font-size: 11px; color: var(--accent-crimson); text-align: center;">Failed to query devices</div>`;
+      }
+    }
+  } else {
+    renderDeviceMenu([
+      { id: "1", name: state.device_name || "Realtek Audio", is_default: true }
+    ]);
+  }
+}
+
+function closeDeviceMenu() {
+  isDeviceMenuOpen = false;
+  const popover = document.getElementById("deviceMenuPopover");
+  const tag = document.getElementById("statusDeviceTag");
+  if (popover) popover.style.display = "none";
+  if (tag) tag.classList.remove("open");
+}
+
+function renderDeviceMenu(devices) {
+  const listEl = document.getElementById("deviceMenuList");
+  const countEl = document.getElementById("deviceMenuCount");
+  if (!listEl) return;
+
+  listEl.innerHTML = "";
+  if (countEl) countEl.innerText = `${devices.length} ${devices.length === 1 ? 'Device' : 'Devices'}`;
+
+  if (!devices || devices.length === 0) {
+    listEl.innerHTML = `<div style="padding: 12px; font-size: 11px; color: var(--text-muted); text-align: center;">No active audio endpoints detected</div>`;
+    return;
+  }
+
+  devices.forEach(dev => {
+    const item = document.createElement("div");
+    item.className = `device-menu-item ${dev.is_default ? 'active' : ''}`;
+    
+    const icon = getDeviceIcon(dev.name);
+    const cleanName = formatCleanDeviceName(dev.name);
+
+    item.innerHTML = `
+      <div class="device-item-left">
+        <span class="device-item-icon">${icon}</span>
+        <div class="device-item-name-group">
+          <span class="device-item-name">${cleanName}</span>
+          <span class="device-item-raw" title="${dev.name}">${dev.name}</span>
+        </div>
+      </div>
+      ${dev.is_default ? '<span class="device-item-active-badge">ACTIVE</span>' : ''}
+    `;
+
+    item.addEventListener("click", () => {
+      selectAudioDevice(dev.id, cleanName, icon);
+    });
+
+    listEl.appendChild(item);
+  });
+}
+
+async function selectAudioDevice(deviceId, cleanName, icon) {
+  closeDeviceMenu();
+  showToast(`Switching audio output to ${cleanName}...`, "info");
+
+  const devIconEl = document.getElementById("deviceIcon");
+  if (devIconEl && icon) devIconEl.innerText = icon;
+
+  const devTextEl = document.getElementById("deviceText");
+  if (devTextEl) devTextEl.innerText = cleanName;
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.set_default_device) {
+    try {
+      const ok = await window.pywebview.api.set_default_device(deviceId);
+      if (ok) {
+        showToast(`Active Output: ${cleanName}`, "success");
+      } else {
+        showToast(`Failed to switch to ${cleanName}`, "warning");
+      }
+    } catch (e) {
+      showToast(`Error switching device: ${e}`, "warning");
+    }
+  }
+}
+
 function openSettingsGuide(targetId) {
   const modal = document.getElementById("settingsGuideModal");
   if (!modal) return;
@@ -1055,6 +1182,11 @@ window.filterGuide = filterGuide;
 window.searchGuide = searchGuide;
 window.updateGuideLiveBadges = updateGuideLiveBadges;
 window.formatCleanDeviceName = formatCleanDeviceName;
+window.toggleDeviceMenu = toggleDeviceMenu;
+window.openDeviceMenu = openDeviceMenu;
+window.closeDeviceMenu = closeDeviceMenu;
+window.selectAudioDevice = selectAudioDevice;
+window.getDeviceIcon = getDeviceIcon;
 
 window.onWindowHidden = function() {
   state.is_window_visible = false;
@@ -1093,6 +1225,8 @@ window.receiveTelemetry = function(data) {
     state.device_name = data.device_name;
     const devText = document.getElementById("deviceText");
     if (devText) devText.innerText = formatCleanDeviceName(data.device_name);
+    const devIcon = document.getElementById("deviceIcon");
+    if (devIcon) devIcon.innerText = getDeviceIcon(data.device_name);
   }
 
   if (data.eco_mode !== undefined && data.eco_mode !== state.eco_mode) {
@@ -1171,6 +1305,8 @@ window.receiveInitialConfig = function(cfg) {
     state.device_name = cfg.device_name;
     const devText = document.getElementById("deviceText");
     if (devText) devText.innerText = formatCleanDeviceName(cfg.device_name);
+    const devIcon = document.getElementById("deviceIcon");
+    if (devIcon) devIcon.innerText = getDeviceIcon(cfg.device_name);
   }
 
   const pSwitch = document.getElementById("powerSwitch");
@@ -1366,6 +1502,10 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     if (e.key === "Escape") {
+      if (isDeviceMenuOpen) {
+        closeDeviceMenu();
+        return;
+      }
       const guideModal = document.getElementById("settingsGuideModal");
       if (guideModal && guideModal.style.display !== "none") {
         closeSettingsGuide();
@@ -1378,6 +1518,16 @@ window.addEventListener("DOMContentLoaded", () => {
       const profDrawer = document.getElementById("profileDrawer");
       if (profDrawer && profDrawer.style.display !== "none") {
         profDrawer.style.display = "none";
+      }
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (isDeviceMenuOpen) {
+      const popover = document.getElementById("deviceMenuPopover");
+      const tag = document.getElementById("statusDeviceTag");
+      if (popover && !popover.contains(e.target) && tag && !tag.contains(e.target)) {
+        closeDeviceMenu();
       }
     }
   });

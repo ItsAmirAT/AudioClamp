@@ -48,6 +48,26 @@ class AudioCallbackHandler(COMObject):
             self.engine.on_user_master_volume_changed(new_master)
         return 0
 
+CLSID_PolicyConfigClient = GUID('{870AF99C-171D-4F9E-AF0D-E63Df40c2BC9}')
+IID_IPolicyConfig = GUID('{F8679F50-850A-41CF-9C72-430F290290C8}')
+
+class IPolicyConfig(IUnknown):
+    _iid_ = IID_IPolicyConfig
+    _methods_ = [
+        COMMETHOD([], HRESULT, 'GetMixFormat', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['out'], POINTER(ctypes.c_void_p), 'ppFormat')),
+        COMMETHOD([], HRESULT, 'GetDeviceFormat', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['in'], ctypes.c_int, 'bMixFormat'), (['out'], POINTER(ctypes.c_void_p), 'ppFormat')),
+        COMMETHOD([], HRESULT, 'ResetDeviceFormat', (['in'], ctypes.c_wchar_p, 'pszDeviceName')),
+        COMMETHOD([], HRESULT, 'SetDeviceFormat', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['in'], ctypes.c_void_p, 'pEndpointFormat')),
+        COMMETHOD([], HRESULT, 'GetProcessingPeriod', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['in'], ctypes.c_int, 'bDefault'), (['out'], POINTER(ctypes.c_void_p), 'pmnsDuration')),
+        COMMETHOD([], HRESULT, 'SetProcessingPeriod', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['in'], ctypes.c_void_p, 'pmnsDuration')),
+        COMMETHOD([], HRESULT, 'GetShareMode', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['out'], POINTER(ctypes.c_void_p), 'pMode')),
+        COMMETHOD([], HRESULT, 'SetShareMode', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['in'], ctypes.c_void_p, 'pMode')),
+        COMMETHOD([], HRESULT, 'GetPropertyValue', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['in'], ctypes.c_void_p, 'pKey'), (['out'], POINTER(ctypes.c_void_p), 'pv')),
+        COMMETHOD([], HRESULT, 'SetPropertyValue', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['in'], ctypes.c_void_p, 'pKey'), (['in'], ctypes.c_void_p, 'pv')),
+        COMMETHOD([], HRESULT, 'SetDefaultEndpoint', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['in'], ctypes.c_int, 'role')),
+        COMMETHOD([], HRESULT, 'SetEndpointVisibility', (['in'], ctypes.c_wchar_p, 'pszDeviceName'), (['in'], ctypes.c_int, 'visible')),
+    ]
+
 class AudioEngine:
     def __init__(self, config: ConfigManager):
         self.config = config
@@ -91,6 +111,72 @@ class AudioEngine:
 
     def rescan_sessions_now(self):
         self._force_rescan = True
+
+    def get_playback_devices(self) -> List[Dict[str, Any]]:
+        need_uninit = False
+        try:
+            try:
+                CoInitializeEx(COINIT_MULTITHREADED)
+                need_uninit = True
+            except OSError:
+                pass
+
+            de = AudioUtilities.GetDeviceEnumerator()
+            from pycaw.constants import EDataFlow, DEVICE_STATE
+            collection = de.EnumAudioEndpoints(EDataFlow.eRender.value, DEVICE_STATE.ACTIVE.value)
+            count = collection.GetCount()
+
+            default_speaker = AudioUtilities.GetSpeakers()
+            default_id = default_speaker.id if default_speaker and hasattr(default_speaker, "id") else ""
+
+            devices_list = []
+            for i in range(count):
+                dev_item = collection.Item(i)
+                ad = AudioUtilities.CreateDevice(dev_item)
+                dev_id = getattr(ad, "id", "")
+                name = getattr(ad, "FriendlyName", f"Audio Output {i+1}")
+                devices_list.append({
+                    "id": dev_id,
+                    "name": name,
+                    "is_default": bool(dev_id and dev_id == default_id)
+                })
+            return devices_list
+        except Exception as e:
+            print(f"[AudioEngine] Failed to enumerate playback devices: {e}")
+            return []
+        finally:
+            if need_uninit:
+                try:
+                    CoUninitialize()
+                except Exception:
+                    pass
+
+    def set_default_playback_device(self, device_id: str) -> bool:
+        need_uninit = False
+        try:
+            try:
+                CoInitializeEx(COINIT_MULTITHREADED)
+                need_uninit = True
+            except OSError:
+                pass
+
+            from comtypes import CoCreateInstance
+            policy_config = CoCreateInstance(CLSID_PolicyConfigClient, IPolicyConfig, CLSCTX_ALL)
+            # Set for Console (0), Multimedia (1), and Communications (2)
+            policy_config.SetDefaultEndpoint(device_id, 0)
+            policy_config.SetDefaultEndpoint(device_id, 1)
+            policy_config.SetDefaultEndpoint(device_id, 2)
+            self.signal_device_changed()
+            return True
+        except Exception as e:
+            print(f"[AudioEngine] Failed to set default endpoint {device_id}: {e}")
+            return False
+        finally:
+            if need_uninit:
+                try:
+                    CoUninitialize()
+                except Exception:
+                    pass
 
     def on_user_master_volume_changed(self, new_vol: float):
         with self.lock:

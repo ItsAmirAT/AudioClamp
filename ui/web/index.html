@@ -25,14 +25,23 @@
         <span class="brand-version">v2.4</span>
       </div>
 
-      <div class="unified-status-pill" id="unifiedStatusPill" title="Audio Engine State & Active Output Device">
-        <span class="status-pulse-dot"></span>
+      <div class="unified-status-pill" id="unifiedStatusPill">
+        <span class="status-pulse-dot" title="Audio Engine Active"></span>
         <span class="status-mode-tag" id="statusLatencyText">Pro Audio · 0.3ms</span>
         <span class="status-sep">/</span>
-        <span class="status-device-tag">
-          <span class="device-icon">🎧</span>
+        <span class="status-device-tag" id="statusDeviceTag" onclick="toggleDeviceMenu(event)" title="Click to switch active audio output device">
+          <span class="device-icon" id="deviceIcon">🎧</span>
           <span class="device-name-text" id="deviceText">Realtek Audio</span>
+          <span class="device-chevron">▾</span>
         </span>
+      </div>
+      <!-- Audio Device Quick-Switcher Popover -->
+      <div class="device-menu-popover" id="deviceMenuPopover" style="display: none;" onmousedown="event.stopPropagation();">
+        <div class="device-menu-header">
+          <span class="device-menu-title">Playback Audio Device</span>
+          <span class="device-menu-count" id="deviceMenuCount">Devices</span>
+        </div>
+        <div class="device-menu-list" id="deviceMenuList"></div>
       </div>
       <!-- Hidden legacy fallbacks for scripts -->
       <span class="latency-text" style="display:none;"></span>
