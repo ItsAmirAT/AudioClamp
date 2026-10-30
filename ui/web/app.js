@@ -445,6 +445,7 @@ function updateCeiling(db) {
   }
 
   updateQuickCeilingButtons(state.threshold_db);
+  updateGuideLiveBadges();
 
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_threshold(state.threshold_db);
@@ -487,6 +488,7 @@ function setReleaseMs(ms) {
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_release_ms(val);
   }
+  updateGuideLiveBadges();
   showToast(`Footstep Recovery: ${val} ms`, "info");
 }
 
@@ -515,6 +517,7 @@ function setKneeMode(mode) {
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_knee_mode(mode);
   }
+  updateGuideLiveBadges();
   showToast(`Dynamics Mode: ${mode === "soft_knee" ? "Soft-Knee (4:1)" : "Brickwall (∞:1)"}`, "info");
 }
 
@@ -540,6 +543,7 @@ function setScope(mode) {
   }
 
   renderMonitoredChips();
+  updateGuideLiveBadges();
 
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_scope(mode);
@@ -743,6 +747,7 @@ function highlightProfileCard(profileName) {
       card.classList.remove("active");
     }
   });
+  updateGuideLiveBadges();
 }
 
 function applyProfile(profileName) {
@@ -878,11 +883,178 @@ function setEcoModeUI(enabled) {
 function toggleEcoMode() {
   const nextVal = !state.eco_mode;
   setEcoModeUI(nextVal);
+  updateGuideLiveBadges();
   if (window.pywebview && window.pywebview.api && window.pywebview.api.toggle_eco_mode) {
     window.pywebview.api.toggle_eco_mode(nextVal);
   }
   showToast(nextVal ? "Eco Mode: Active (Low CPU, 30 FPS)" : "Eco Mode: Off (Pro Audio, Max FPS)", "info");
 }
+
+// ==========================================
+// Settings Guide Modal & Clean Formatting
+// ==========================================
+
+function formatCleanDeviceName(rawName) {
+  if (!rawName) return "Audio Output";
+  let clean = String(rawName).trim();
+  // Strip trademark symbols
+  clean = clean.replace(/\([Rr]\)|\([Tt][Mm]\)|®|™/g, "").trim();
+
+  // Strip prefix wrappers like "Speakers (xyz)" or "Headphones (xyz)" or "Speakers / Headphones (xyz)"
+  const parenMatch = clean.match(/^(?:Speakers|Headphones|Headset|Speakers\s*\/\s*Headphones|Line Out|Digital Output)\s*\((.+)\)$/i);
+  if (parenMatch && parenMatch[1]) {
+    clean = parenMatch[1].trim();
+  }
+
+  // Remove duplicate spaces
+  clean = clean.replace(/\s{2,}/g, " ").trim();
+
+  // If excessively long, trim neatly
+  if (clean.length > 24) {
+    clean = clean.substring(0, 22) + "…";
+  }
+  return clean || "Audio Output";
+}
+
+function openSettingsGuide(targetId) {
+  const modal = document.getElementById("settingsGuideModal");
+  if (!modal) return;
+  modal.style.display = "flex";
+  updateGuideLiveBadges();
+
+  // Reset tab filter to 'all' so target card is visible
+  filterGuide("all");
+
+  const searchInput = document.getElementById("guideSearchInput");
+  if (searchInput) searchInput.value = "";
+
+  if (targetId) {
+    let cardId = targetId;
+    if (!cardId.startsWith("guide-")) {
+      cardId = "guide-" + cardId;
+    }
+    setTimeout(() => {
+      const el = document.getElementById(cardId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.remove("guide-card-highlight");
+        void el.offsetWidth; // Trigger reflow for animation restart
+        el.classList.add("guide-card-highlight");
+        setTimeout(() => el.classList.remove("guide-card-highlight"), 2400);
+      }
+    }, 80);
+  } else {
+    const container = document.getElementById("guideCardsContainer");
+    if (container) container.scrollTop = 0;
+  }
+}
+
+function closeSettingsGuide() {
+  const modal = document.getElementById("settingsGuideModal");
+  if (modal) modal.style.display = "none";
+}
+
+function onGuideBackdropClick(event) {
+  if (event.target && event.target.id === "settingsGuideModal") {
+    closeSettingsGuide();
+  }
+}
+
+function filterGuide(category) {
+  const tabs = document.querySelectorAll(".guide-tab");
+  tabs.forEach(t => {
+    t.classList.toggle("active", t.getAttribute("data-tab") === category);
+  });
+
+  const cards = document.querySelectorAll(".guide-card");
+  cards.forEach(card => {
+    const cardCat = card.getAttribute("data-category");
+    if (category === "all" || cardCat === category) {
+      card.style.display = "block";
+    } else {
+      card.style.display = "none";
+    }
+  });
+}
+
+function searchGuide(query) {
+  const q = (query || "").toLowerCase().trim();
+  const tabs = document.querySelectorAll(".guide-tab");
+
+  if (q.length > 0) {
+    tabs.forEach(t => t.classList.toggle("active", t.getAttribute("data-tab") === "all"));
+  }
+
+  const cards = document.querySelectorAll(".guide-card");
+  cards.forEach(card => {
+    if (!q) {
+      const activeTab = document.querySelector(".guide-tab.active");
+      const currentCat = activeTab ? activeTab.getAttribute("data-tab") : "all";
+      const cardCat = card.getAttribute("data-category");
+      card.style.display = (currentCat === "all" || cardCat === currentCat) ? "block" : "none";
+      return;
+    }
+    const text = card.textContent.toLowerCase();
+    card.style.display = text.includes(q) ? "block" : "none";
+  });
+}
+
+function updateGuideLiveBadges() {
+  const pLimiter = document.getElementById("guideBadge_limiter");
+  if (pLimiter) {
+    pLimiter.innerText = state.enabled ? "LIVE: ONLINE" : "LIVE: OFF";
+    pLimiter.style.borderColor = state.enabled ? "var(--accent-emerald)" : "var(--accent-crimson)";
+    pLimiter.style.color = state.enabled ? "var(--accent-emerald)" : "var(--accent-crimson)";
+  }
+
+  const pCeiling = document.getElementById("guideBadge_ceiling");
+  if (pCeiling) {
+    pCeiling.innerText = `LIVE: ${state.threshold_db.toFixed(1)} dB`;
+  }
+
+  const pKnee = document.getElementById("guideBadge_knee");
+  if (pKnee) {
+    pKnee.innerText = state.knee_mode === "soft_knee" ? "LIVE: Soft-Knee (4:1)" : "LIVE: Brickwall (∞:1)";
+  }
+
+  const pRelease = document.getElementById("guideBadge_release");
+  if (pRelease) {
+    pRelease.innerText = `LIVE: ${state.release_ms} ms`;
+  }
+
+  const pScope = document.getElementById("guideBadge_scope");
+  if (pScope) {
+    let scopeName = "Auto-Detect Game";
+    if (state.target_mode === "specific_app") scopeName = `Specific App (${state.target_process || "Selected"})`;
+    else if (state.target_mode === "master_device" || state.target_mode === "master") scopeName = "Master PC (Global)";
+    pScope.innerText = `LIVE: ${scopeName}`;
+  }
+
+  const pAutoWatch = document.getElementById("guideBadge_autowatch");
+  if (pAutoWatch) {
+    pAutoWatch.innerText = state.auto_watch_mode ? "LIVE: Active" : "LIVE: Off";
+  }
+
+  const pProfile = document.getElementById("guideBadge_profile");
+  if (pProfile) {
+    pProfile.innerText = `LIVE: ${state.active_profile || "Custom"}`;
+  }
+
+  const pEco = document.getElementById("guideBadge_eco");
+  if (pEco) {
+    pEco.innerText = state.eco_mode ? "LIVE: Eco Active" : "LIVE: Off";
+    pEco.style.borderColor = state.eco_mode ? "var(--accent-amber)" : "var(--border-subtle)";
+    pEco.style.color = state.eco_mode ? "var(--accent-amber)" : "var(--text-muted)";
+  }
+}
+
+window.openSettingsGuide = openSettingsGuide;
+window.closeSettingsGuide = closeSettingsGuide;
+window.onGuideBackdropClick = onGuideBackdropClick;
+window.filterGuide = filterGuide;
+window.searchGuide = searchGuide;
+window.updateGuideLiveBadges = updateGuideLiveBadges;
+window.formatCleanDeviceName = formatCleanDeviceName;
 
 window.onWindowHidden = function() {
   state.is_window_visible = false;
@@ -920,15 +1092,16 @@ window.receiveTelemetry = function(data) {
   if (data.device_name && data.device_name !== state.device_name) {
     state.device_name = data.device_name;
     const devText = document.getElementById("deviceText");
-    if (devText) devText.innerText = data.device_name;
+    if (devText) devText.innerText = formatCleanDeviceName(data.device_name);
   }
 
   if (data.eco_mode !== undefined && data.eco_mode !== state.eco_mode) {
     setEcoModeUI(data.eco_mode);
+    updateGuideLiveBadges();
   }
 
   // Real-time sub-millisecond polling latency readout in titlebar
-  const latencyText = document.querySelector(".latency-text");
+  const latencyText = document.getElementById("statusLatencyText") || document.querySelector(".latency-text");
   if (latencyText && data.poll_latency_ms !== undefined) {
     const modeLabel = data.mmcss_active ? "Pro Audio" : "Active";
     latencyText.innerText = `${modeLabel} · ${data.poll_latency_ms.toFixed(2)}ms`;
@@ -975,6 +1148,11 @@ window.receiveTelemetry = function(data) {
         outReadout.style.textShadow = "0 0 6px var(--accent-emerald-glow)";
       }
     }
+
+    const guideModal = document.getElementById("settingsGuideModal");
+    if (guideModal && guideModal.style.display === "flex") {
+      updateGuideLiveBadges();
+    }
   }
 };
 
@@ -988,6 +1166,12 @@ window.receiveInitialConfig = function(cfg) {
   state.knee_mode = cfg.knee_mode ?? "soft_knee";
   state.release_ms = cfg.release_ms ?? 120;
   state.target_mode = cfg.target_mode ?? "auto_game";
+
+  if (cfg.device_name) {
+    state.device_name = cfg.device_name;
+    const devText = document.getElementById("deviceText");
+    if (devText) devText.innerText = formatCleanDeviceName(cfg.device_name);
+  }
 
   const pSwitch = document.getElementById("powerSwitch");
   if (pSwitch) pSwitch.checked = state.enabled;
@@ -1041,6 +1225,7 @@ window.receiveInitialConfig = function(cfg) {
 
   renderMonitoredChips();
   setScope(state.target_mode);
+  updateGuideLiveBadges();
 };
 
 function initWindowDrag() {
@@ -1129,6 +1314,7 @@ window.addEventListener("DOMContentLoaded", () => {
         pBadge.style.borderColor = enabled ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 42, 95, 0.4)";
         pBadge.style.background = enabled ? "rgba(16, 185, 129, 0.12)" : "rgba(255, 42, 95, 0.12)";
       }
+      updateGuideLiveBadges();
       if (window.pywebview && window.pywebview.api) {
         window.pywebview.api.toggle_enabled(enabled);
       }
@@ -1180,6 +1366,11 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     if (e.key === "Escape") {
+      const guideModal = document.getElementById("settingsGuideModal");
+      if (guideModal && guideModal.style.display !== "none") {
+        closeSettingsGuide();
+        return;
+      }
       const drawer = document.getElementById("customAppDrawer");
       if (drawer && drawer.style.display !== "none") {
         drawer.style.display = "none";

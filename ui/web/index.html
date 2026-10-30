@@ -12,36 +12,50 @@
   <!-- Frameless Custom Titlebar -->
   <div class="titlebar pywebview-drag-region">
     <div class="titlebar-left">
-      <svg class="brand-shield" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M14 2L24 6.5V14C24 20.2 19.8 24.8 14 26C8.2 24.8 4 20.2 4 14V6.5L14 2Z" 
-              fill="rgba(0, 242, 254, 0.08)" stroke="#00f2fe" stroke-width="1.8"/>
-        <line x1="8.5" y1="16" x2="8.5" y2="12" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
-        <line x1="12" y1="18.5" x2="12" y2="9.5" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
-        <line x1="15.5" y1="20" x2="15.5" y2="8" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
-        <line x1="19" y1="16.5" x2="19" y2="11.5" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
-      </svg>
-      <span class="brand-title">AUDIOCLAMP</span>
-      <span class="brand-version">v2.4</span>
-      <span class="titlebar-divider">|</span>
-      <div class="latency-capsule">
-        <span class="latency-dot"></span>
-        <span class="latency-text">Active · 0.24ms latency</span>
+      <div class="brand-group">
+        <svg class="brand-shield" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M14 2L24 6.5V14C24 20.2 19.8 24.8 14 26C8.2 24.8 4 20.2 4 14V6.5L14 2Z" 
+                fill="rgba(0, 242, 254, 0.08)" stroke="#00f2fe" stroke-width="1.8"/>
+          <line x1="8.5" y1="16" x2="8.5" y2="12" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="12" y1="18.5" x2="12" y2="9.5" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="15.5" y1="20" x2="15.5" y2="8" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="19" y1="16.5" x2="19" y2="11.5" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        <span class="brand-title">AUDIOCLAMP</span>
+        <span class="brand-version">v2.4</span>
       </div>
-      <div class="device-capsule" id="deviceCapsule" title="Active Playback Audio Endpoint">
-        <span class="device-icon">🎧</span>
-        <span class="device-name-text" id="deviceText">Speakers (Realtek Audio)</span>
+
+      <div class="unified-status-pill" id="unifiedStatusPill" title="Audio Engine State & Active Output Device">
+        <span class="status-pulse-dot"></span>
+        <span class="status-mode-tag" id="statusLatencyText">Pro Audio · 0.3ms</span>
+        <span class="status-sep">/</span>
+        <span class="status-device-tag">
+          <span class="device-icon">🎧</span>
+          <span class="device-name-text" id="deviceText">Realtek Audio</span>
+        </span>
       </div>
+      <!-- Hidden legacy fallbacks for scripts -->
+      <span class="latency-text" style="display:none;"></span>
     </div>
 
     <div class="titlebar-right" onmousedown="event.stopPropagation();">
-      <button class="btn-eco-toggle" id="btnEcoToggle" onclick="toggleEcoMode()" title="Toggle Eco Mode (low CPU & battery saver)">
-        <span class="eco-icon">⚡</span> <span class="eco-text" id="ecoBtnText">Eco: Off</span>
+      <button class="btn-hdr-action guide-btn" id="btnOpenGuide" onclick="openSettingsGuide()" title="Settings & Audio Dynamics Guide">
+        <span class="hdr-btn-icon">📖</span>
+        <span class="hdr-btn-text">Guide</span>
       </button>
-      <button class="btn-support-top" onclick="openDonationLink()" title="Support development on Ko-fi">
-        <span>☕</span> Support
+
+      <button class="btn-hdr-action eco-btn" id="btnEcoToggle" onclick="toggleEcoMode()" title="Toggle Eco Mode (lowers CPU usage and caps visualizer to 30 FPS)">
+        <span class="hdr-btn-icon">⚡</span>
+        <span class="hdr-btn-text" id="ecoBtnText">Eco</span>
       </button>
+
+      <button class="btn-hdr-action support-btn" onclick="openDonationLink()" title="Support development on Ko-fi">
+        <span class="hdr-btn-icon">☕</span>
+        <span class="hdr-btn-text">Support</span>
+      </button>
+
       <div class="win-controls">
-        <button class="win-btn" onclick="minimizeWindow()" title="Minimize">
+        <button class="win-btn" onclick="minimizeWindow()" title="Minimize to Tray">
           <svg width="10" height="2" viewBox="0 0 10 2" fill="currentColor"><rect width="10" height="2" rx="1"/></svg>
         </button>
         <button class="win-btn" id="btnMaxRestore" onclick="toggleMaximize()" title="Maximize / Restore">
@@ -69,6 +83,7 @@
             <span class="stitch-slider"></span>
           </div>
           <span class="power-label">PEAK LIMITER</span>
+          <button class="card-info-btn" type="button" onclick="openSettingsGuide('peak-limiter')" title="What is Peak Limiter & how it protects hearing">?</button>
           <span class="online-badge" id="powerStatusBadge">ONLINE</span>
           <!-- Hidden fallback elements for compatibility with scripts -->
           <span id="powerDot" style="display:none;"></span>
@@ -86,6 +101,7 @@
         <!-- Auto-Watch Toggle -->
         <label class="auto-watch-group" title="Auto-starts limiter when game opens; auto-stops and restores audio when game closes">
           <span class="auto-watch-text">Auto-Watch</span>
+          <button class="card-info-btn" type="button" onclick="openSettingsGuide('auto-watch')" title="What is Auto-Watch Mode?">?</button>
           <div class="stitch-switch mini">
             <input type="checkbox" id="autoWatchSwitch" checked onchange="onAutoWatchToggle(this.checked)">
             <span class="stitch-slider"></span>
@@ -100,7 +116,10 @@
     <!-- Active Apps Card -->
     <div class="card active-apps-card">
       <div class="active-apps-row">
-        <span class="active-apps-label">ACTIVE APPS</span>
+        <div class="card-heading-group">
+          <span class="active-apps-label">ACTIVE APPS</span>
+          <button class="card-info-btn" onclick="openSettingsGuide('clamping-scope')" title="How App Isolation works without ducking Discord">?</button>
+        </div>
         <div class="monitored-chips-container" id="monitoredChipsList">
           <!-- Dynamically populated chips -->
         </div>
@@ -130,6 +149,7 @@
       <div class="meter-card-header">
         <div class="meter-header-left">
           <span class="meter-title">REAL-TIME PEAK METRICS</span>
+          <button class="card-info-btn" onclick="openSettingsGuide('peak-limiter')" title="Learn about peak visualizer metrics">?</button>
           <span class="meter-lookahead">1.0ms Lookahead</span>
         </div>
         <div class="meter-header-right">
@@ -161,7 +181,10 @@
     <!-- Loudness Ceiling Card -->
     <div class="card ceiling-card">
       <div class="ceiling-header">
-        <span class="card-heading">LOUDNESS CEILING</span>
+        <div class="card-heading-group">
+          <span class="card-heading">LOUDNESS CEILING</span>
+          <button class="card-info-btn" onclick="openSettingsGuide('loudness-ceiling')" title="What is Loudness Ceiling & optimal settings">?</button>
+        </div>
         <span class="ceiling-readout-badge" id="ceilingReadout">-12.0 dB</span>
       </div>
       <div class="slider-wrapper">
@@ -183,7 +206,10 @@
       <!-- Dynamics Mode -->
       <div class="card dynamics-col-card">
         <div class="col-card-header">
-          <span class="card-heading">DYNAMICS MODE</span>
+          <div class="card-heading-group">
+            <span class="card-heading">DYNAMICS MODE</span>
+            <button class="card-info-btn" onclick="openSettingsGuide('dynamics-mode')" title="Soft-Knee vs Brickwall distance perception">?</button>
+          </div>
           <span class="dynamics-ratio-badge" id="dynamicsRatioBadge">4:1 RATIO</span>
         </div>
         <div class="segmented-pill-switch">
@@ -196,7 +222,10 @@
       <!-- Footstep Recovery -->
       <div class="card recovery-col-card">
         <div class="col-card-header">
-          <span class="card-heading">FOOTSTEP RECOVERY</span>
+          <div class="card-heading-group">
+            <span class="card-heading">FOOTSTEP RECOVERY</span>
+            <button class="card-info-btn" onclick="openSettingsGuide('footstep-recovery')" title="Preventing gunshot echoes while preserving footsteps">?</button>
+          </div>
           <span class="recovery-readout-badge" id="releaseNum">120 ms</span>
         </div>
         <div class="slider-wrapper mini">
@@ -213,7 +242,10 @@
     <!-- Competitive Profiles Grid Card -->
     <div class="card profiles-card">
       <div class="profiles-header-row">
-        <span class="card-heading">COMPETITIVE PROFILES</span>
+        <div class="card-heading-group">
+          <span class="card-heading">COMPETITIVE PROFILES</span>
+          <button class="card-info-btn" onclick="openSettingsGuide('competitive-profiles')" title="Acoustic tuning for specific competitive shooters">?</button>
+        </div>
         <button class="btn-new-profile" onclick="toggleNewProfileDrawer()">+ New Profile</button>
       </div>
       <!-- Collapsible Profile Creator Drawer -->
@@ -326,6 +358,261 @@
       <span class="hotkey-label">Hotkeys:</span>
       <kbd class="hotkey-badge" title="Toggle Limiter">[Ctrl+Alt+L]</kbd>
       <kbd class="hotkey-badge" title="Nudge Ceiling Up/Down">[Ctrl+Alt+↑/↓]</kbd>
+    </div>
+  </div>
+
+  <!-- Settings & Audio Dynamics Guide Modal Overlay -->
+  <div class="guide-modal-backdrop" id="settingsGuideModal" style="display: none;" onclick="onGuideBackdropClick(event)">
+    <div class="guide-modal-dialog">
+      <!-- Modal Header -->
+      <div class="guide-dialog-header">
+        <div class="guide-dialog-title-group">
+          <div class="guide-title-row">
+            <span class="guide-header-icon">📖</span>
+            <span class="guide-header-title">Settings & Audio Dynamics Guide</span>
+            <span class="guide-version-tag">Field Manual</span>
+          </div>
+          <span class="guide-subtitle">A detailed breakdown of every control, what it does, and how it impacts footsteps, gunshots, and game audio.</span>
+        </div>
+        <button class="guide-close-btn" onclick="closeSettingsGuide()" title="Close Guide (Esc)">&times;</button>
+      </div>
+
+      <!-- Category Filter Pills & Search Bar -->
+      <div class="guide-filter-bar">
+        <div class="guide-tabs-group">
+          <button class="guide-tab active" data-tab="all" onclick="filterGuide('all')">All Settings</button>
+          <button class="guide-tab" data-tab="limiting" onclick="filterGuide('limiting')">Loudness & Limiting</button>
+          <button class="guide-tab" data-tab="dynamics" onclick="filterGuide('dynamics')">Dynamics & Recovery</button>
+          <button class="guide-tab" data-tab="scope" onclick="filterGuide('scope')">Scope & Auto-Watch</button>
+          <button class="guide-tab" data-tab="profiles" onclick="filterGuide('profiles')">Game Profiles</button>
+        </div>
+        <div class="guide-search-wrapper">
+          <input type="text" id="guideSearchInput" class="guide-search-input" placeholder="Search settings (e.g. footsteps, echo, ceiling, discord)..." oninput="searchGuide(this.value)">
+        </div>
+      </div>
+
+      <!-- Guide Content Cards (Scrollable) -->
+      <div class="guide-cards-container" id="guideCardsContainer">
+        <!-- 1. Peak Limiter Switch -->
+        <div class="guide-card" data-category="limiting" id="guide-peak-limiter">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">⚡</span>
+              <span class="guide-item-name">Peak Limiter (Master Toggle)</span>
+              <span class="guide-badge-live" id="guideBadge_limiter">LIVE: ONLINE</span>
+            </div>
+            <span class="guide-cat-tag">Master Limiting</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">The primary real-time acoustic protection engine. Monitors audio output at 333 Hz with sub-millisecond lookahead to prevent hearing fatigue and acoustic trauma.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">HOW IT AFFECTS GAME AUDIO</span>
+              <p class="guide-text">When <strong>ONLINE</strong>, AudioClamp transparently monitors incoming sound and applies smooth soft-knee attenuation the moment sound crosses your Loudness Ceiling. When <strong>OFF</strong>, audio passes completely unaltered in bit-perfect hardware bypass.</p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">PRO TIP:</span>
+              <span class="guide-tip-text">Keep Online while playing competitive games so you can comfortably increase Windows master volume to hear faint distant steps without risking hearing damage during sudden point-blank shotgun blasts.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Loudness Ceiling -->
+        <div class="guide-card" data-category="limiting" id="guide-loudness-ceiling">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">🎚️</span>
+              <span class="guide-item-name">Loudness Ceiling (Threshold dB)</span>
+              <span class="guide-badge-live" id="guideBadge_ceiling">LIVE: -12.0 dB</span>
+            </div>
+            <span class="guide-cat-tag">Master Limiting</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">The absolute maximum volume ceiling audio is permitted to reach. Measured in negative decibels full-scale (dBFS), where 0 dB is 100% maximum audio output.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">HOW IT AFFECTS GAME AUDIO</span>
+              <p class="guide-text">All sounds below the ceiling (quiet enemy footsteps, crawling in grass, distant reloads, far engines) play at full target volume without any reduction. Any loud burst (AWP sniper, grenade explosion, full-auto rifle burst) is clamped down to this ceiling.</p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">SWEET SPOT:</span>
+              <span class="guide-tip-text"><strong>-12 dB to -14 dB</strong> for high dynamic range games like PUBG and Tarkov. <strong>-8 dB to -10 dB</strong> for CS2 and Valorant. Use quick pills (-6, -12, -18, -24) or [Ctrl+Alt+↑/↓] hotkeys to nudge in real-time.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Dynamics Mode -->
+        <div class="guide-card" data-category="dynamics" id="guide-dynamics-mode">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">📈</span>
+              <span class="guide-item-name">Dynamics Mode (Soft-Knee vs Brickwall)</span>
+              <span class="guide-badge-live" id="guideBadge_knee">LIVE: Soft-Knee (4:1)</span>
+            </div>
+            <span class="guide-cat-tag">Dynamics</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">The compression curve applied as incoming audio approaches and passes above your Loudness Ceiling.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">HOW IT AFFECTS GAME AUDIO</span>
+              <p class="guide-text">
+                <strong>Soft-Knee (4:1)</strong>: Progressively curves gain reduction around the threshold. <em>Crucial for distance perception</em>—allows you to distinguish whether an enemy gunshot was 25 meters away or 150 meters away because louder shots still retain subtle dynamic contrast.<br>
+                <strong>Brickwall (∞:1)</strong>: Applies a hard flat ceiling with zero overshoot. Maximizes ear protection against ear-piercing flashbangs, but flattens distance perception.
+              </p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">RECOMMENDATION:</span>
+              <span class="guide-tip-text">Always use <strong>Soft-Knee (4:1)</strong> for tactical shooters (PUBG, CS2, Tarkov, Warzone). Use <strong>Brickwall</strong> for late-night movie watching or extreme hearing sensitivity.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Footstep Recovery -->
+        <div class="guide-card" data-category="dynamics" id="guide-footstep-recovery">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">⏱️</span>
+              <span class="guide-item-name">Footstep Recovery (Release Time)</span>
+              <span class="guide-badge-live" id="guideBadge_release">LIVE: 140 ms</span>
+            </div>
+            <span class="guide-cat-tag">Dynamics</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">The exponential decay rate (measured in milliseconds) at which volume returns to 100% normal level after a loud gunshot or explosion ceases.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">HOW IT AFFECTS GAME AUDIO & ECHOES</span>
+              <p class="guide-text">
+                If release is too fast (<80ms): Gunshots in open terrain or indoor rooms have natural reverberation tails. Recovering too quickly amplifies the reverb tail as it decays, causing unnatural echo surges or pumping sounds.<br>
+                If release is too slow (>400ms): Footsteps immediately after a firefight remain quiet for too long.
+              </p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">ANTI-ECHO TUNING:</span>
+              <span class="guide-tip-text">Set between <strong>120 ms and 150 ms</strong>. This ensures room reverberation decays naturally without echo pumping, while restoring 100% footstep audibility immediately after gunfire finishes.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Clamping Scope -->
+        <div class="guide-card" data-category="scope" id="guide-clamping-scope">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">🎯</span>
+              <span class="guide-item-name">Clamping Scope (Auto-Detect / Specific App / Master PC)</span>
+              <span class="guide-badge-live" id="guideBadge_scope">LIVE: Auto-Detect Game</span>
+            </div>
+            <span class="guide-cat-tag">Routing & Scope</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">Controls which audio sessions are clamped by the audio limiter engine.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">HOW IT AFFECTS DISCORD & GAME AUDIO</span>
+              <p class="guide-text">
+                <strong>Auto-Detect Game</strong>: Automatically attaches to any running game from your monitored games list (PUBG, CS2, Tarkov, Warzone, Apex, Valorant). <em>Discord, Teamspeak, and Spotify remain completely uncompressed and clear.</em><br>
+                <strong>Specific App</strong>: Locks onto an exact `.exe` of your choice via the drawer or Browse button. Only that game is clamped.<br>
+                <strong>Master PC</strong>: Clamps the global audio endpoint for the entire computer.
+              </p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">DISCORD PROTECTION:</span>
+              <span class="guide-tip-text">Keep on <strong>Auto-Detect Game</strong> or <strong>Specific App</strong> so your teammates' voices never get quieted when you shoot your weapon.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Auto-Watch Mode -->
+        <div class="guide-card" data-category="scope" id="guide-auto-watch">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">👁️</span>
+              <span class="guide-item-name">Auto-Watch Mode</span>
+              <span class="guide-badge-live" id="guideBadge_autowatch">LIVE: Active</span>
+            </div>
+            <span class="guide-cat-tag">Automation</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">Intelligent process watcher that handles engine activation and volume restoration automatically in the background.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">HOW IT AFFECTS SYSTEM RESOURCES</span>
+              <p class="guide-text">While you browse the web or work, AudioClamp sleeps at virtually 0.0% CPU with volume at 100%. The moment your game opens, it activates in under 0.4 seconds. When you close the game, it instantly restores all volumes to 100% and returns to standby.</p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">HANDS-FREE:</span>
+              <span class="guide-tip-text">Keep enabled so you never need to remember to open or close AudioClamp before playing.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Competitive Profiles -->
+        <div class="guide-card" data-category="profiles" id="guide-competitive-profiles">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">🏆</span>
+              <span class="guide-item-name">Competitive Profiles & Auto-Switching</span>
+              <span class="guide-badge-live" id="guideBadge_profile">LIVE: PUBG</span>
+            </div>
+            <span class="guide-cat-tag">Profiles</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">Custom acoustic profiles calibrated for the sound engines of specific competitive shooters.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">HOW IT AFFECTS GAMEPLAY</span>
+              <p class="guide-text">
+                • <strong>PUBG</strong>: -12 dB ceiling, 140ms recovery — suppresses loud Beryl/M416/redzone spikes while keeping footsteps and distant vehicle engines audible.<br>
+                • <strong>CS2</strong>: -8 dB ceiling, 80ms recovery — fast recovery for rapid AWP shots, AK-47 sprays, and bomb defusal audio.<br>
+                • <strong>Tarkov</strong>: -10 dB ceiling, 130ms recovery — heavy blast concussive absorption with crisp headset perception.<br>
+                • <strong>Warzone / CoD</strong>: -14 dB ceiling, 150ms recovery — tames precision airstrikes, cluster mines, and vehicle horns.<br>
+                • <strong>Cinema / Late Night</strong>: Deep ceilings (-15 to -20 dB) with long releases for dialogue leveling.
+              </p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">AUTO-SWITCHING:</span>
+              <span class="guide-tip-text">AudioClamp monitors your active foreground game window and automatically applies the matching profile when you focus the game.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8. Eco Mode -->
+        <div class="guide-card" data-category="scope" id="guide-eco-mode">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">🍃</span>
+              <span class="guide-item-name">Eco Mode (Ultra-Low CPU)</span>
+              <span class="guide-badge-live" id="guideBadge_eco">LIVE: Off</span>
+            </div>
+            <span class="guide-cat-tag">Power & Resources</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">Low-power battery saver mode designed for gaming laptops and low-spec systems.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">HOW IT AFFECTS SYSTEM PERFORMANCE</span>
+              <p class="guide-text">Scales active WASAPI polling from 3.0 ms to 6.0 ms, relaxes idle silent polling to 35 ms, and caps UI visualizer rendering to 30 FPS. Audio limiting remains active and accurate while CPU cycles and battery draw are significantly reduced.</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
