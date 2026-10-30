@@ -28,6 +28,12 @@ class WebviewApi:
         self._app.config.set("enabled", bool(enabled))
         self._app.tray_mgr.update_icon(bool(enabled))
 
+    def toggle_eco_mode(self, enabled):
+        self._app.config.set("eco_mode", bool(enabled))
+
+    def get_active_device(self):
+        return getattr(self._app.engine, "active_device_name", "Default Audio Endpoint")
+
     def set_knee_mode(self, mode):
         self._app.config.set("knee_mode", str(mode))
 
@@ -246,6 +252,7 @@ class WebviewWindow:
         try:
             self.window.show()
             self.window.restore()
+            self.window.evaluate_js("if(window.onWindowShown) onWindowShown();")
         except Exception:
             pass
         try:
@@ -287,7 +294,7 @@ class WebviewWindow:
                 WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
                 user32.EnumWindows(WNDENUMPROC(enum_proc), 0)
 
-            # Ensure background tray icon helper windows remain strictly hidden
+            # Ensure background tray icon helper windows remain strictly hidden and isolated from taskbar
             def enum_hide_aux(hwnd, lParam):
                 pid = ctypes.c_ulong()
                 user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
@@ -295,7 +302,9 @@ class WebviewWindow:
                     cls_buff = ctypes.create_unicode_buffer(256)
                     user32.GetClassNameW(hwnd, cls_buff, 256)
                     cls_name = cls_buff.value.lower()
-                    if "systemtray" in cls_name or "parking" in cls_name:
+                    if "systemtray" in cls_name or "parking" in cls_name or "broadcast" in cls_name:
+                        cur_ex = user32.GetWindowLongW(hwnd, -20)
+                        user32.SetWindowLongW(hwnd, -20, cur_ex | 0x00000080)
                         user32.ShowWindow(hwnd, 0)  # SW_HIDE
                 return True
 
@@ -316,7 +325,10 @@ class WebviewWindow:
             return
         self.is_visible = False
         try:
+            self.window.evaluate_js("if(window.onWindowHidden) onWindowHidden();")
             self.window.hide()
+            import gc
+            gc.collect()
         except Exception:
             pass
 
@@ -350,6 +362,12 @@ class WebviewWindow:
                     pass
 
     def run(self, start_minimized: bool = False):
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AudioClamp.StudioLimiter.v2")
+        except Exception:
+            pass
+
         self.is_visible = not start_minimized
         self.window = webview.create_window(
             title="AudioClamp",

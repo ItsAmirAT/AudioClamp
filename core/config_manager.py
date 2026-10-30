@@ -128,6 +128,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "start_with_windows": False,
     "start_minimized": False,
     "poll_cadence_ms": 3.0,
+    "eco_mode": False,
     "adaptive_ballistics": True,
     "auto_profile_switch": True,
     "hotkey_toggle": "ctrl+alt+l",

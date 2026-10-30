@@ -1,4 +1,5 @@
 import os
+import time
 import threading
 from typing import Callable
 from PIL import Image
@@ -53,6 +54,22 @@ class TrayIconManager:
             item("Exit AudioClamp", lambda icon, item: self.on_exit())
         )
 
+    def _suppress_pystray_window(self):
+        import ctypes
+        user32 = ctypes.windll.user32
+        for _ in range(15):
+            time.sleep(0.08)
+            if self.tray_icon and hasattr(self.tray_icon, "_hwnd") and self.tray_icon._hwnd:
+                for h in [self.tray_icon._hwnd, getattr(self.tray_icon, "_menu_hwnd", None)]:
+                    if h:
+                        try:
+                            cur_ex = user32.GetWindowLongW(h, -20)
+                            user32.SetWindowLongW(h, -20, cur_ex | 0x00000080)
+                            user32.ShowWindow(h, 0)
+                        except Exception:
+                            pass
+                break
+
     def start(self):
         self.tray_icon = pystray.Icon(
             "AudioClamp",
@@ -62,6 +79,7 @@ class TrayIconManager:
         )
         self.thread = threading.Thread(target=self.tray_icon.run, daemon=True)
         self.thread.start()
+        threading.Thread(target=self._suppress_pystray_window, daemon=True).start()
 
     def update_icon(self, is_enabled: bool):
         if self.tray_icon:

@@ -27,9 +27,16 @@
         <span class="latency-dot"></span>
         <span class="latency-text">Active · 0.24ms latency</span>
       </div>
+      <div class="device-capsule" id="deviceCapsule" title="Active Playback Audio Endpoint">
+        <span class="device-icon">🎧</span>
+        <span class="device-name-text" id="deviceText">Speakers (Realtek Audio)</span>
+      </div>
     </div>
 
     <div class="titlebar-right" onmousedown="event.stopPropagation();">
+      <button class="btn-eco-toggle" id="btnEcoToggle" onclick="toggleEcoMode()" title="Toggle Eco Mode (low CPU & battery saver)">
+        <span class="eco-icon">⚡</span> <span class="eco-text" id="ecoBtnText">Eco: Off</span>
+      </button>
       <button class="btn-support-top" onclick="openDonationLink()" title="Support development on Ko-fi">
         <span>☕</span> Support
       </button>

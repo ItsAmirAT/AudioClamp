@@ -19,7 +19,10 @@ let state = {
   monitored_apps: [],
   is_app_running: false,
   auto_watch_status: "Standby: Watching for Games",
-  start_with_windows: false
+  start_with_windows: false,
+  eco_mode: false,
+  device_name: "Default Audio Output",
+  is_window_visible: true
 };
 
 const canvas = document.getElementById("meterCanvas");
@@ -36,6 +39,7 @@ let isCeilingHovered = false;
 let isMaximizedWindow = false;
 let lastRenderTime = performance.now();
 let lastTextUpdateTime = 0;
+let rafId = null;
 
 function updateCanvasDimensions() {
   const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -66,9 +70,19 @@ resizeObserver.observe(canvas);
 window.addEventListener("resize", updateCanvasDimensions);
 
 function renderMeter(now) {
-  requestAnimationFrame(renderMeter);
+  if (!state.is_window_visible) {
+    rafId = null;
+    return;
+  }
 
   if (!now) now = performance.now();
+  if (state.eco_mode && (now - lastRenderTime < 32)) {
+    rafId = requestAnimationFrame(renderMeter);
+    return;
+  }
+
+  rafId = requestAnimationFrame(renderMeter);
+
   const dt = Math.min(0.08, Math.max(0.001, (now - lastRenderTime) / 1000.0));
   lastRenderTime = now;
 
@@ -845,6 +859,56 @@ function openDonationLink() {
   }
 }
 
+function setEcoModeUI(enabled) {
+  state.eco_mode = !!enabled;
+  const btn = document.getElementById("btnEcoToggle");
+  const text = document.getElementById("ecoBtnText");
+  if (btn) {
+    if (state.eco_mode) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  }
+  if (text) {
+    text.innerText = state.eco_mode ? "Eco: On" : "Eco: Off";
+  }
+}
+
+function toggleEcoMode() {
+  const nextVal = !state.eco_mode;
+  setEcoModeUI(nextVal);
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.toggle_eco_mode) {
+    window.pywebview.api.toggle_eco_mode(nextVal);
+  }
+  showToast(nextVal ? "Eco Mode: Active (Low CPU, 30 FPS)" : "Eco Mode: Off (Pro Audio, Max FPS)", "info");
+}
+
+window.onWindowHidden = function() {
+  state.is_window_visible = false;
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+};
+
+window.onWindowShown = function() {
+  state.is_window_visible = true;
+  updateCanvasDimensions();
+  if (!rafId) {
+    lastRenderTime = performance.now();
+    rafId = requestAnimationFrame(renderMeter);
+  }
+};
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    window.onWindowHidden();
+  } else {
+    window.onWindowShown();
+  }
+});
+
 window.receiveTelemetry = function(data) {
   state.peak = data.peak || 0.0;
   state.output_peak = data.output_peak ?? (data.peak || 0.0);
@@ -852,6 +916,16 @@ window.receiveTelemetry = function(data) {
   state.gain_reduction_db = data.gain_reduction_db || 0.0;
   state.is_app_running = data.is_app_running ?? true;
   state.auto_watch_status = data.auto_watch_status || "";
+
+  if (data.device_name && data.device_name !== state.device_name) {
+    state.device_name = data.device_name;
+    const devText = document.getElementById("deviceText");
+    if (devText) devText.innerText = data.device_name;
+  }
+
+  if (data.eco_mode !== undefined && data.eco_mode !== state.eco_mode) {
+    setEcoModeUI(data.eco_mode);
+  }
 
   // Real-time sub-millisecond polling latency readout in titlebar
   const latencyText = document.querySelector(".latency-text");
@@ -930,6 +1004,10 @@ window.receiveInitialConfig = function(cfg) {
 
   const startSwitch = document.getElementById("autoStartSwitch");
   if (startSwitch) startSwitch.checked = state.start_with_windows;
+
+  if (cfg.eco_mode !== undefined) {
+    setEcoModeUI(cfg.eco_mode);
+  }
 
   const cSlider = document.getElementById("ceilingSlider");
   if (cSlider) {

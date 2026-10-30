@@ -7,7 +7,17 @@ from ctypes import POINTER, c_float, c_uint32, wintypes
 import psutil
 from comtypes import COMMETHOD, HRESULT, IUnknown, GUID, CLSCTX_ALL, COMObject, CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolumeCallback, ISimpleAudioVolume
+from pycaw.callbacks import MMNotificationClient
 from core.config_manager import ConfigManager, GAME_PROFILES
+
+class AudioDeviceChangeWatcher(MMNotificationClient):
+    def __init__(self, engine: "AudioEngine"):
+        super().__init__()
+        self.engine = engine
+
+    def on_default_device_changed(self, flow, flow_id, role, role_id, default_device_id):
+        if flow_id == 0 or str(flow) == "eRender":
+            self.engine.signal_device_changed()
 
 class IAudioMeterInformationFull(IUnknown):
     _iid_ = GUID('{C02216F6-8C67-4B5B-9D00-D008E73E0064}')
@@ -66,12 +76,18 @@ class AudioEngine:
         self.is_limiting: bool = False
         self.hold_timer: float = 0.0
         self.hold_time_sec: float = 0.095 # 95ms hold prevents gain flutter during full-auto fire and captures acoustic reflections
+        self.active_device_name: str = "Default Audio Output"
+        self._device_changed: bool = False
         self._force_rescan: bool = False
 
         self.latest_peak: float = 0.0
         self.latest_channel_peaks: List[float] = [0.0, 0.0]
         self.telemetry_callback: Optional[Callable[[Dict[str, Any]], None]] = None
         self.on_profile_auto_switched: Optional[Callable[[str], None]] = None
+
+    def signal_device_changed(self):
+        self._device_changed = True
+        self._force_rescan = True
 
     def rescan_sessions_now(self):
         self._force_rescan = True
@@ -199,6 +215,16 @@ class AudioEngine:
         callback_ptr = None
         peaks_buffer = (c_float * 2)()
 
+        watcher = None
+        device_enum = None
+        try:
+            device_enum = AudioUtilities.GetDeviceEnumerator()
+            watcher = AudioDeviceChangeWatcher(self)
+            device_enum.RegisterEndpointNotificationCallback(watcher)
+        except Exception:
+            watcher = None
+            device_enum = None
+
         def init_master_device():
             nonlocal device, vol_endpoint, master_meter, callback_handler, callback_ptr, peaks_buffer
             if vol_endpoint and callback_ptr:
@@ -209,6 +235,7 @@ class AudioEngine:
             device = AudioUtilities.GetSpeakers()
             if not device:
                 return False
+            self.active_device_name = getattr(device, "FriendlyName", "Default Audio Endpoint")
             vol_endpoint = device.EndpointVolume
             master_meter_ptr = device._dev.Activate(IAudioMeterInformationFull._iid_, CLSCTX_ALL, None)
             master_meter = master_meter_ptr.QueryInterface(IAudioMeterInformationFull)
@@ -241,6 +268,7 @@ class AudioEngine:
         loud_event_duration = 0.0
         last_fg_check_time = 0.0
         last_fg_pid = 0
+        silence_ticks = 0
 
         last_time = time.perf_counter()
 
@@ -250,8 +278,14 @@ class AudioEngine:
                 dt = now - last_time
                 last_time = now
 
+                if self._device_changed:
+                    self._device_changed = False
+                    init_master_device()
+
+                eco_active = self.config.get("eco_mode", False)
                 poll_ms = float(self.config.get("poll_cadence_ms", 3.0))
-                tick_interval = max(0.0015, min(0.015, poll_ms / 1000.0))
+                base_tick = 0.006 if eco_active else max(0.0015, min(0.015, poll_ms / 1000.0))
+                tick_interval = base_tick
 
                 enabled = self.config.get("enabled", True)
                 target_mode = self.config.get("target_mode", "auto_game")
@@ -403,22 +437,31 @@ class AudioEngine:
                     self.latest_channel_peaks = [0.0, 0.0]
                     self.gain_reduction_db = 0.0
                     self.is_limiting = False
+                    silence_ticks += 1
                     if self.telemetry_callback:
                         data = {
                             "peak": 0.0,
+                            "output_peak": 0.0,
                             "channel_peaks": [0.0, 0.0],
                             "gain_reduction_db": 0.0,
                             "active_target": self.active_session_name,
                             "is_game_isolated": False,
                             "is_limiting": False,
                             "is_app_running": False,
-                            "auto_watch_status": self.auto_watch_status
+                            "auto_watch_status": self.auto_watch_status,
+                            "poll_latency_ms": 0.0,
+                            "mmcss_active": bool(mmcss_handle is not None),
+                            "device_name": self.active_device_name,
+                            "eco_mode": eco_active
                         }
                         try:
                             self.telemetry_callback(data)
                         except Exception:
                             pass
-                    time.sleep(tick_interval)
+                    if silence_ticks % 600 == 0:
+                        import gc
+                        gc.collect()
+                    time.sleep(0.035 if eco_active else 0.022)
                     continue
 
                 # 2. Read Peak Level
@@ -484,7 +527,7 @@ class AudioEngine:
                             self.hold_timer -= dt
                         else:
                             # Smooth natural release: never recover faster than 100ms on gunshot decays.
-                            # This allows environmental reverb to die down naturally without pumping or artificial echo surges.
+                            # This allows environmental reverb to die down naturally without pumping or unnatural echo surges.
                             tau_rel = max(0.100, release_ms / 1000.0)
                             alpha_rel = math.exp(-dt / tau_rel)
                             self.current_attenuation_factor = (
@@ -531,6 +574,22 @@ class AudioEngine:
                 except Exception:
                     pass
 
+                # Adaptive Idle Cadence
+                if input_peak < 0.0005:
+                    silence_ticks += 1
+                    if silence_ticks > 250:
+                        tick_interval = 0.032 if eco_active else 0.020
+                        if silence_ticks % 600 == 0:
+                            import gc
+                            gc.collect()
+                    elif silence_ticks > 35:
+                        tick_interval = 0.018 if eco_active else 0.012
+                    else:
+                        tick_interval = base_tick
+                else:
+                    silence_ticks = 0
+                    tick_interval = base_tick
+
                 # 5. Telemetry
                 elapsed = time.perf_counter() - now
                 if self.telemetry_callback:
@@ -546,7 +605,9 @@ class AudioEngine:
                         "is_app_running": self.is_app_running,
                         "auto_watch_status": self.auto_watch_status,
                         "poll_latency_ms": round(elapsed * 1000.0, 2),
-                        "mmcss_active": bool(mmcss_handle is not None)
+                        "mmcss_active": bool(mmcss_handle is not None),
+                        "device_name": self.active_device_name,
+                        "eco_mode": eco_active
                     }
                     try:
                         self.telemetry_callback(data)
@@ -558,6 +619,11 @@ class AudioEngine:
                     time.sleep(sleep_time)
 
         finally:
+            if device_enum and watcher:
+                try:
+                    device_enum.UnregisterEndpointNotificationCallback(watcher)
+                except Exception:
+                    pass
             try:
                 if vol_endpoint:
                     vol_endpoint.SetMasterVolumeLevelScalar(self.user_target_master_vol, self.limiter_guid)
