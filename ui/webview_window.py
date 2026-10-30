@@ -131,6 +131,15 @@ class WebviewApi:
         self._app.config.set("threshold_db", 0.0)
         self._app.config.set("threshold_percent", 100.0)
 
+    def nudge_ceiling(self, delta_db):
+        current_db = float(self._app.config.get("threshold_db", -12.0))
+        new_db = max(-30.0, min(0.0, current_db + float(delta_db)))
+        self._app.config.set("threshold_db", new_db)
+        scalar = 10.0 ** (new_db / 20.0)
+        self._app.config.set("threshold_percent", max(5.0, min(100.0, scalar * 100.0)))
+        if self._app.window:
+            self._app.window.evaluate_js(f"if(window.nudgeCeiling) {{ window.nudgeCeiling({float(delta_db)}); }} else if(window.updateCeiling) {{ updateCeiling({round(new_db, 1)}); }}")
+
     def move_window(self, x, y):
         if self._app.window:
             try:
@@ -181,11 +190,15 @@ class WebviewWindow:
 
         self.hotkey_mgr = HotkeyManager(
             on_toggle=self.toggle_enable,
-            on_reset=self.emergency_reset
+            on_reset=self.emergency_reset,
+            on_nudge_up=self.nudge_ceiling_up,
+            on_nudge_down=self.nudge_ceiling_down
         )
         self.hotkey_mgr.register_hotkeys(
             self.config.get("hotkey_toggle", "ctrl+alt+l"),
-            self.config.get("hotkey_emergency_reset", "ctrl+alt+r")
+            self.config.get("hotkey_emergency_reset", "ctrl+alt+r"),
+            self.config.get("hotkey_nudge_up", "ctrl+alt+up"),
+            self.config.get("hotkey_nudge_down", "ctrl+alt+down")
         )
 
         self.tray_mgr = TrayIconManager(
@@ -199,6 +212,21 @@ class WebviewWindow:
         self.tray_mgr.start()
 
         self.engine.telemetry_callback = self._on_telemetry_data
+        self.engine.on_profile_auto_switched = self._on_profile_auto_switched
+
+    def nudge_ceiling_up(self):
+        self.api.nudge_ceiling(1.0)
+
+    def nudge_ceiling_down(self):
+        self.api.nudge_ceiling(-1.0)
+
+    def _on_profile_auto_switched(self, profile_name: str):
+        if self.window:
+            cfg = self.config.config
+            try:
+                self.window.evaluate_js(f"if(window.receiveInitialConfig) receiveInitialConfig({json.dumps(cfg)}); if(window.showToast) showToast('Auto-Profile: {profile_name}', 'info');")
+            except Exception:
+                pass
 
     def toggle_enable(self):
         new_val = not self.config.get("enabled", True)

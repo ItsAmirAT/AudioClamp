@@ -127,8 +127,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "dark_mode": True,
     "start_with_windows": False,
     "start_minimized": False,
+    "poll_cadence_ms": 3.0,
+    "adaptive_ballistics": True,
+    "auto_profile_switch": True,
     "hotkey_toggle": "ctrl+alt+l",
     "hotkey_emergency_reset": "ctrl+alt+r",
+    "hotkey_nudge_up": "ctrl+alt+up",
+    "hotkey_nudge_down": "ctrl+alt+down",
 }
 
 class ConfigManager:

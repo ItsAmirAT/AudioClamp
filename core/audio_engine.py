@@ -2,7 +2,9 @@ import time
 import math
 import threading
 from typing import Callable, List, Dict, Optional, Tuple, Any
-from ctypes import POINTER, c_float, c_uint32
+import ctypes
+from ctypes import POINTER, c_float, c_uint32, wintypes
+import psutil
 from comtypes import COMMETHOD, HRESULT, IUnknown, GUID, CLSCTX_ALL, COMObject, CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolumeCallback, ISimpleAudioVolume
 from core.config_manager import ConfigManager, GAME_PROFILES
@@ -69,6 +71,7 @@ class AudioEngine:
         self.latest_peak: float = 0.0
         self.latest_channel_peaks: List[float] = [0.0, 0.0]
         self.telemetry_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+        self.on_profile_auto_switched: Optional[Callable[[str], None]] = None
 
     def rescan_sessions_now(self):
         self._force_rescan = True
@@ -164,6 +167,31 @@ class AudioEngine:
     def _limiter_worker(self):
         CoInitializeEx(COINIT_MULTITHREADED)
 
+        winmm = None
+        try:
+            winmm = ctypes.windll.winmm
+            winmm.timeBeginPeriod(1)
+        except Exception:
+            winmm = None
+
+        avrt = None
+        mmcss_handle = None
+        try:
+            avrt = ctypes.windll.avrt
+            avrt.AvSetMmThreadCharacteristicsW.argtypes = [wintypes.LPCWSTR, wintypes.LPDWORD]
+            avrt.AvSetMmThreadCharacteristicsW.restype = wintypes.HANDLE
+            avrt.AvSetMmThreadPriority.argtypes = [wintypes.HANDLE, ctypes.c_int]
+            avrt.AvSetMmThreadPriority.restype = wintypes.BOOL
+            avrt.AvRevertMmThreadCharacteristics.argtypes = [wintypes.HANDLE]
+            avrt.AvRevertMmThreadCharacteristics.restype = wintypes.BOOL
+
+            task_index = wintypes.DWORD(0)
+            mmcss_handle = avrt.AvSetMmThreadCharacteristicsW("Pro Audio", ctypes.byref(task_index))
+            if mmcss_handle:
+                avrt.AvSetMmThreadPriority(mmcss_handle, 2)
+        except Exception:
+            mmcss_handle = None
+
         device = None
         vol_endpoint = None
         master_meter = None
@@ -209,7 +237,11 @@ class AudioEngine:
         target_session_vols: List[Any] = []
         target_proc_name = ""
 
-        tick_interval = 0.010
+        prev_peak = 0.0
+        loud_event_duration = 0.0
+        last_fg_check_time = 0.0
+        last_fg_pid = 0
+
         last_time = time.perf_counter()
 
         try:
@@ -217,6 +249,9 @@ class AudioEngine:
                 now = time.perf_counter()
                 dt = now - last_time
                 last_time = now
+
+                poll_ms = float(self.config.get("poll_cadence_ms", 3.0))
+                tick_interval = max(0.0015, min(0.015, poll_ms / 1000.0))
 
                 enabled = self.config.get("enabled", True)
                 target_mode = self.config.get("target_mode", "auto_game")
@@ -229,6 +264,34 @@ class AudioEngine:
 
                 auto_watch = self.config.get("auto_watch_mode", True)
                 monitored_apps = [m.lower() for m in self.config.get("monitored_apps", [])]
+
+                # 0. Active Foreground Window Detection & Profile Auto-Switching
+                if self.config.get("auto_profile_switch", True) and (now - last_fg_check_time > 0.4):
+                    last_fg_check_time = now
+                    try:
+                        user32 = ctypes.windll.user32
+                        hwnd_fg = user32.GetForegroundWindow()
+                        if hwnd_fg:
+                            fg_pid_dw = wintypes.DWORD()
+                            user32.GetWindowThreadProcessId(hwnd_fg, ctypes.byref(fg_pid_dw))
+                            cur_fg_pid = fg_pid_dw.value
+                            if cur_fg_pid and cur_fg_pid != last_fg_pid:
+                                last_fg_pid = cur_fg_pid
+                                fg_proc = psutil.Process(cur_fg_pid)
+                                fg_name = fg_proc.name().lower()
+                                for prof_name, prof_data in GAME_PROFILES.items():
+                                    exe_list = [e.lower() for e in prof_data.get("exe_names", [])]
+                                    if fg_name in exe_list:
+                                        if self.config.get("selected_profile") != prof_name:
+                                            self.config.apply_profile(prof_name)
+                                            if self.on_profile_auto_switched:
+                                                try:
+                                                    self.on_profile_auto_switched(prof_name)
+                                                except Exception:
+                                                    pass
+                                        break
+                    except Exception:
+                        pass
 
                 # 1. Periodic session scanner
                 if (now - last_session_scan_time > 1.0) or self._force_rescan:
@@ -403,9 +466,14 @@ class AudioEngine:
                         input_peak, thresh_db, knee_mode, knee_width_db, ratio
                     )
 
-                    if target_att < self.current_attenuation_factor:
+                    peak_delta = input_peak - prev_peak
+                    peak_deriv = peak_delta / max(0.0005, dt)
+                    is_steep_transient = (peak_deriv > 18.0 and input_peak > 0.10)
+
+                    if target_att < self.current_attenuation_factor or is_steep_transient:
                         overshoot_db = -gr_db
-                        tau_attack = 0.0010 if overshoot_db > 6.0 else 0.0025
+                        loud_event_duration += dt
+                        tau_attack = 0.0004 if (is_steep_transient or overshoot_db > 6.0) else 0.0020
                         alpha_att = math.exp(-dt / tau_attack)
                         self.current_attenuation_factor = (
                             self.current_attenuation_factor * alpha_att + target_att * (1.0 - alpha_att)
@@ -416,7 +484,10 @@ class AudioEngine:
                         if self.hold_timer > 0.0:
                             self.hold_timer -= dt
                         else:
-                            tau_rel = release_ms / 1000.0
+                            if loud_event_duration < 0.065:
+                                tau_rel = max(0.035, min(release_ms / 1000.0, 0.050))
+                            else:
+                                tau_rel = release_ms / 1000.0
                             alpha_rel = math.exp(-dt / tau_rel)
                             self.current_attenuation_factor = (
                                 self.current_attenuation_factor * alpha_rel + target_att * (1.0 - alpha_rel)
@@ -424,6 +495,7 @@ class AudioEngine:
                             if self.current_attenuation_factor >= 0.995:
                                 self.current_attenuation_factor = 1.0
                                 self.is_limiting = False
+                                loud_event_duration = 0.0
 
                     self.gain_reduction_db = 20.0 * math.log10(max(0.001, self.current_attenuation_factor))
                 else:
@@ -438,7 +510,10 @@ class AudioEngine:
                         if self.current_attenuation_factor >= 0.995:
                             self.current_attenuation_factor = 1.0
                             self.is_limiting = False
+                            loud_event_duration = 0.0
                         self.gain_reduction_db = 0.0
+
+                prev_peak = input_peak
 
                 # 4. Apply Attenuation Relative to Fixed Baseline
                 try:
@@ -472,7 +547,8 @@ class AudioEngine:
                         "is_limiting": self.is_limiting,
                         "is_app_running": self.is_app_running,
                         "auto_watch_status": self.auto_watch_status,
-                        "poll_latency_ms": round(elapsed * 1000.0, 2)
+                        "poll_latency_ms": round(elapsed * 1000.0, 2),
+                        "mmcss_active": bool(mmcss_handle is not None)
                     }
                     try:
                         self.telemetry_callback(data)
@@ -498,4 +574,14 @@ class AudioEngine:
                             pass
             except Exception:
                 pass
+            if avrt and mmcss_handle:
+                try:
+                    avrt.AvRevertMmThreadCharacteristics(mmcss_handle)
+                except Exception:
+                    pass
+            if winmm:
+                try:
+                    winmm.timeEndPeriod(1)
+                except Exception:
+                    pass
             CoUninitialize()

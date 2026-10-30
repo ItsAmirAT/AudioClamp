@@ -796,6 +796,13 @@ function saveCustomProfile() {
   showToast(`Custom profile saved: ${cleanName}`, "success");
 }
 
+window.nudgeCeiling = function(delta) {
+  const current = state.threshold_db;
+  const target = Math.max(-30.0, Math.min(0.0, current + delta));
+  updateCeiling(target);
+  showToast(`Ceiling: ${target.toFixed(1)} dB`, "info");
+};
+
 function emergencyReset() {
   updateCeiling(0.0);
   showToast("Panic Reset: Volume Ceiling set to 100% (0 dB)", "warning");
@@ -849,7 +856,8 @@ window.receiveTelemetry = function(data) {
   // Real-time sub-millisecond polling latency readout in titlebar
   const latencyText = document.querySelector(".latency-text");
   if (latencyText && data.poll_latency_ms !== undefined) {
-    latencyText.innerText = `Active · ${data.poll_latency_ms.toFixed(2)}ms latency`;
+    const modeLabel = data.mmcss_active ? "Pro Audio" : "Active";
+    latencyText.innerText = `${modeLabel} · ${data.poll_latency_ms.toFixed(2)}ms`;
   }
 
   if (state.active_target !== data.active_target || state.is_game_isolated !== data.is_game_isolated) {
@@ -1081,6 +1089,16 @@ window.addEventListener("DOMContentLoaded", () => {
     if (e.ctrlKey && e.altKey && (e.key === "r" || e.key === "R")) {
       e.preventDefault();
       emergencyReset();
+    }
+
+    if (e.ctrlKey && e.altKey && (e.key === "ArrowUp" || e.key === "Up")) {
+      e.preventDefault();
+      window.nudgeCeiling(1.0);
+    }
+
+    if (e.ctrlKey && e.altKey && (e.key === "ArrowDown" || e.key === "Down")) {
+      e.preventDefault();
+      window.nudgeCeiling(-1.0);
     }
 
     if (e.key === "Escape") {
