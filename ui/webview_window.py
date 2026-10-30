@@ -255,19 +255,52 @@ class WebviewWindow:
             current_pid = kernel32.GetCurrentProcessId()
 
             hwnd_target = None
-            def enum_proc(hwnd, lParam):
-                nonlocal hwnd_target
-                pid = ctypes.c_ulong()
-                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-                if pid.value == current_pid and user32.GetParent(hwnd) == 0:
-                    hwnd_target = hwnd
-                    return False
-                return True
+            if hasattr(self.window, "native") and self.window.native:
+                try:
+                    hwnd_target = int(self.window.native.Handle.ToInt64())
+                except Exception:
+                    pass
 
-            WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
-            user32.EnumWindows(WNDENUMPROC(enum_proc), 0)
             if not hwnd_target:
                 hwnd_target = user32.FindWindowW(None, "AudioClamp")
+
+            if not hwnd_target:
+                def enum_proc(hwnd, lParam):
+                    nonlocal hwnd_target
+                    pid = ctypes.c_ulong()
+                    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                    if pid.value == current_pid and user32.GetParent(hwnd) == 0:
+                        cls_buff = ctypes.create_unicode_buffer(256)
+                        user32.GetClassNameW(hwnd, cls_buff, 256)
+                        cls_name = cls_buff.value.lower()
+                        if "systemtray" in cls_name or "ime" in cls_name or "gdi+" in cls_name:
+                            return True
+                        length = user32.GetWindowTextLengthW(hwnd)
+                        if length > 0:
+                            buff = ctypes.create_unicode_buffer(length + 1)
+                            user32.GetWindowTextW(hwnd, buff, length + 1)
+                            if buff.value == "AudioClamp":
+                                hwnd_target = hwnd
+                                return False
+                    return True
+
+                WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+                user32.EnumWindows(WNDENUMPROC(enum_proc), 0)
+
+            # Ensure background tray icon helper windows remain strictly hidden
+            def enum_hide_aux(hwnd, lParam):
+                pid = ctypes.c_ulong()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value == current_pid and hwnd != hwnd_target:
+                    cls_buff = ctypes.create_unicode_buffer(256)
+                    user32.GetClassNameW(hwnd, cls_buff, 256)
+                    cls_name = cls_buff.value.lower()
+                    if "systemtray" in cls_name or "parking" in cls_name:
+                        user32.ShowWindow(hwnd, 0)  # SW_HIDE
+                return True
+
+            WNDENUMPROC_HIDE = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+            user32.EnumWindows(WNDENUMPROC_HIDE(enum_hide_aux), 0)
 
             if hwnd_target:
                 user32.ShowWindow(hwnd_target, 9)  # SW_RESTORE
