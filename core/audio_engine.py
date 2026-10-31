@@ -10,7 +10,8 @@ import psutil
 from comtypes import COMMETHOD, HRESULT, IUnknown, GUID, CLSCTX_ALL, COMObject, CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolumeCallback, ISimpleAudioVolume
 from pycaw.callbacks import MMNotificationClient
-from core.config_manager import ConfigManager, GAME_PROFILES, GAME_EXE_STEMS, EXE_TO_PROFILE
+from core.config_manager import ConfigManager, GAME_PROFILES, GAME_EXE_STEMS, EXE_TO_PROFILE, APPDATA_DIR
+from core.footstep_boost import FootstepBoost
 
 # Telemetry pacing: full rate while audio is present, 5 Hz once the signal sits below -60 dBFS
 SILENCE_PEAK = 0.001
@@ -28,6 +29,12 @@ RELEASE_FAST_STAGE_LIN = 10.0 ** (RELEASE_FAST_STAGE_DB / 20.0)
 # and protects everything after it: a hard cap at the ceiling, and a 150 ms combat hold so the
 # next round in a burst arrives while gain is still down.
 HEARING_SAFE_HOLD_SEC = 0.150
+
+# Combat Guard (opt-in). A clamp of at least 3 dB counts as combat; for the next few seconds the
+# gain may not recover above the guard depth, so the first shot of the next burst or engagement
+# arrives already turned down instead of at full level.
+COMBAT_GUARD_TRIGGER_DB = -3.0
+
 
 DEVICE_RETRY_SEC = 1.0
 SESSION_RESCAN_SEC = 1.0
@@ -134,6 +141,9 @@ class AudioEngine:
         self._test_session_bases: Dict[int, float] = {}
         self._audio_test_pids: frozenset = frozenset()
         self._master_touched: bool = False
+        self._device_id: str = ""
+        self.footstep_boost = FootstepBoost(self.limiter_guid, os.path.join(APPDATA_DIR, "boost_recovery.json"))
+        self.combat_guard_active: bool = False
 
         self.active_session_name: str = "Master Audio (Global)"
         self.active_session_pid: Optional[int] = None
@@ -173,6 +183,9 @@ class AudioEngine:
             "eco_mode": False,
             "audio_test_active": False,
             "hearing_safe": False,
+            "combat_guard_active": False,
+            "footstep_boost_db": 0.0,
+            "footstep_boost_requested": 0.0,
         }
 
     def signal_device_changed(self):
@@ -335,6 +348,7 @@ class AudioEngine:
         master endpoint if master clamping ever ran. Every other app keeps its mixer level."""
         owned = _com_enter()
         try:
+            self.footstep_boost.deactivate()
             if self._master_touched:
                 dev = AudioUtilities.GetSpeakers()
                 if dev:
@@ -541,6 +555,7 @@ class AudioEngine:
                     ptr = None
                 initial_vol = float(endpoint.GetMasterVolumeLevelScalar())
                 device_name = getattr(device, "FriendlyName", "Default Audio Endpoint")
+                device_id = getattr(device, "id", "") or ""
             except Exception as e:
                 print(f"[AudioEngine] Audio endpoint unavailable: {e}")
                 return False
@@ -550,6 +565,7 @@ class AudioEngine:
             callback_handler = handler
             callback_ptr = ptr
             self.active_device_name = device_name
+            self._device_id = device_id
             self.channel_count = channels
             if len(peaks_buffer) != channels:
                 peaks_buffer = (c_float * channels)()
@@ -572,6 +588,20 @@ class AudioEngine:
 
         if not init_master_device():
             next_device_retry = perf_counter() + DEVICE_RETRY_SEC
+
+        def session_key(sess: Any) -> str:
+            try:
+                return str(sess._ctl.GetSessionInstanceIdentifier())
+            except Exception:
+                return ""
+
+        try:
+            if os.path.exists(self.footstep_boost.recovery_path):
+                leftovers = [(session_key(x), x._ctl) for x in AudioUtilities.GetAllSessions()]
+                if self.footstep_boost.recover_after_crash(vol_endpoint, self._device_id, leftovers):
+                    print("[AudioEngine] Undid a Footstep Boost left over from an unclean exit")
+        except Exception:
+            pass
 
         # ---- Session targets (parallel lists rebuilt only on rescan) ----
         t_pids: List[int] = []
@@ -611,6 +641,11 @@ class AudioEngine:
         stereo_linked = True
         hearing_safe = False
         eff_knee_mode = "soft_knee"
+        combat_guard_db = 0.0
+        combat_guard_sec = 4.0
+        guard_lin = 1.0
+        footstep_boost_db = 0.0
+        guard_until = 0.0
         monitored_stems: frozenset = frozenset()
 
         prev_peak = 0.0
@@ -653,7 +688,11 @@ class AudioEngine:
                     eco_active = bool(cfg.get("eco_mode", False))
                     poll_ms = float(cfg.get("poll_cadence_ms", 3.0))
                     base_tick = 0.006 if eco_active else max(0.0015, min(0.015, poll_ms / 1000.0))
-                    enabled = bool(cfg.get("enabled", True))
+                    new_enabled = bool(cfg.get("enabled", True))
+                    if new_enabled != enabled:
+                        # Footstep Boost must never stay on while the limiter is off
+                        self._force_rescan = True
+                    enabled = new_enabled
                     new_mode = cfg.get("target_mode", "auto_game")
                     if new_mode != target_mode:
                         self._force_rescan = True
@@ -674,6 +713,15 @@ class AudioEngine:
                     eff_knee_mode = "brickwall" if hearing_safe else knee_mode
                     if hearing_safe:
                         hold_duration = HEARING_SAFE_HOLD_SEC
+                    combat_guard_db = max(0.0, min(12.0, float(cfg.get("combat_guard_db", 0.0))))
+                    combat_guard_sec = max(1.0, min(10.0, float(cfg.get("combat_guard_sec", 4.0))))
+                    guard_lin = 10.0 ** (-combat_guard_db / 20.0)
+                    if combat_guard_db <= 0.0:
+                        guard_until = 0.0
+                    new_boost = max(0.0, min(12.0, float(cfg.get("footstep_boost_db", 0.0))))
+                    if new_boost != footstep_boost_db:
+                        self._force_rescan = True
+                    footstep_boost_db = new_boost
                     monitored_stems = frozenset(m.lower().removesuffix(".exe") for m in cfg.get("monitored_apps", []))
 
                 session_targeting = target_mode == "auto_game" or target_mode == "specific_app"
@@ -718,6 +766,8 @@ class AudioEngine:
                             matched_pid: Optional[int] = None
                             found_test = False
                             old_index = {pid: i for i, pid in enumerate(t_pids)}
+                            want_boost = footstep_boost_db > 0.0 and enabled
+                            boost_others: List[Tuple[str, Any]] = []
 
                             for s in AudioUtilities.GetAllSessions():
                                 try:
@@ -725,6 +775,8 @@ class AudioEngine:
                                 except Exception:
                                     continue
                                 if not pid:
+                                    if want_boost:
+                                        boost_others.append((session_key(s), s._ctl))
                                     continue
                                 proc_name = pid_name_cache.get(pid)
                                 if proc_name is None:
@@ -740,9 +792,12 @@ class AudioEngine:
                                 if not is_test:
                                     p_clean = proc_name.lower().removesuffix(".exe")
                                     if target_mode == "specific_app":
-                                        if not specific_stem or p_clean != specific_stem:
-                                            continue
-                                    elif p_clean not in monitored_stems and p_clean not in GAME_EXE_STEMS:
+                                        is_target = bool(specific_stem) and p_clean == specific_stem
+                                    else:
+                                        is_target = p_clean in monitored_stems or p_clean in GAME_EXE_STEMS
+                                    if not is_target:
+                                        if want_boost:
+                                            boost_others.append((session_key(s), s._ctl))
                                         continue
 
                                 try:
@@ -789,6 +844,15 @@ class AudioEngine:
                             t_pids, t_meters, t_vols, t_bases = new_pids, new_meters, new_vols, new_bases
                             t_last = [-1.0] * len(t_pids)
 
+                            # Footstep Boost only runs while a clamped game session exists
+                            if want_boost and t_pids and vol_endpoint is not None:
+                                try:
+                                    self.footstep_boost.update(vol_endpoint, self._device_id, boost_others, footstep_boost_db)
+                                except Exception as e:
+                                    print(f"[AudioEngine] Footstep Boost notice: {e}")
+                            elif self.footstep_boost.active:
+                                self.footstep_boost.deactivate()
+
                             if t_pids:
                                 display_name = matched_proc_name or "AudioClamp Test Audio"
                                 self.active_session_name = display_name
@@ -826,6 +890,8 @@ class AudioEngine:
                         if t_pids:
                             release_targets(set())
                             t_pids, t_meters, t_vols, t_bases, t_last = [], [], [], [], []
+                        if self.footstep_boost.active:
+                            self.footstep_boost.deactivate()
                         test_session_found = False
                         self.active_session_name = "Master Device (Entire PC)"
                         self.active_session_pid = None
@@ -860,6 +926,9 @@ class AudioEngine:
                         tele["eco_mode"] = eco_active
                         tele["audio_test_active"] = bool(test_pids)
                         tele["hearing_safe"] = hearing_safe
+                        tele["combat_guard_active"] = self.combat_guard_active
+                        tele["footstep_boost_db"] = self.footstep_boost.applied_db
+                        tele["footstep_boost_requested"] = footstep_boost_db
                         try:
                             self.telemetry_callback(tele)
                         except Exception:
@@ -923,10 +992,18 @@ class AudioEngine:
                 self.latest_channel_peaks[1] = ch1
 
                 # 3. Dynamic compression / limiting
+                # With Footstep Boost active the master is B dB louder, so the ceiling drops by B dB:
+                # loud sounds land where they did before and only quiet sounds gain B dB.
+                boost_db_now = self.footstep_boost.applied_db
+                eff_thresh_db = thresh_db - boost_db_now
+                guard_active = combat_guard_db > 0.0 and now < guard_until
                 if enabled and input_peak > 0.0001:
                     target_att, gr_db = self._compute_soft_knee_attenuation(
-                        input_peak, thresh_db, eff_knee_mode, knee_width_db, ratio
+                        input_peak, eff_thresh_db, eff_knee_mode, knee_width_db, ratio
                     )
+                    if combat_guard_db > 0.0 and gr_db <= COMBAT_GUARD_TRIGGER_DB:
+                        guard_until = now + combat_guard_sec
+                        guard_active = True
 
                     peak_deriv = (input_peak - prev_peak) / (dt if dt > 0.0005 else 0.0005)
                     is_steep_transient = (peak_deriv > 18.0 and input_peak > 0.10)
@@ -946,9 +1023,13 @@ class AudioEngine:
                         if self.hold_timer > 0.0:
                             self.hold_timer -= dt
                         else:
+                            prev_att = self.current_attenuation_factor
                             self.current_attenuation_factor = self._release_step(
-                                self.current_attenuation_factor, target_att, dt, release_ms, not hearing_safe
+                                prev_att, target_att, dt, release_ms, not hearing_safe
                             )
+                            if guard_active:
+                                # Never recover above the guard depth during combat (never pushes gain down)
+                                self.current_attenuation_factor = min(self.current_attenuation_factor, max(prev_att, guard_lin))
                             if self.current_attenuation_factor >= 0.995:
                                 self.current_attenuation_factor = 1.0
                                 self.is_limiting = False
@@ -959,15 +1040,20 @@ class AudioEngine:
                     if self.hold_timer > 0.0:
                         self.hold_timer -= dt
                     else:
+                        prev_att = self.current_attenuation_factor
                         self.current_attenuation_factor = self._release_step(
-                            self.current_attenuation_factor, 1.0, dt, release_ms, not hearing_safe
+                            prev_att, 1.0, dt, release_ms, not hearing_safe
                         )
+                        if guard_active and enabled:
+                            self.current_attenuation_factor = min(self.current_attenuation_factor, max(prev_att, guard_lin))
                         if self.current_attenuation_factor >= 0.995:
                             self.current_attenuation_factor = 1.0
                             self.is_limiting = False
-                        self.gain_reduction_db = 0.0
+                    att_now = self.current_attenuation_factor
+                    self.gain_reduction_db = 20.0 * log10(att_now) if att_now < 0.995 else 0.0
 
                 prev_peak = input_peak
+                self.combat_guard_active = guard_active
 
                 # 4. Apply attenuation relative to the fixed baseline, skipping redundant COM writes
                 att = self.current_attenuation_factor
@@ -1038,6 +1124,9 @@ class AudioEngine:
                     tele["eco_mode"] = eco_active
                     tele["audio_test_active"] = bool(test_pids)
                     tele["hearing_safe"] = hearing_safe
+                    tele["combat_guard_active"] = self.combat_guard_active
+                    tele["footstep_boost_db"] = self.footstep_boost.applied_db
+                    tele["footstep_boost_requested"] = footstep_boost_db
                     try:
                         self.telemetry_callback(tele)
                     except Exception:
@@ -1055,6 +1144,10 @@ class AudioEngine:
                     sleep(sleep_time)
 
         finally:
+            try:
+                self.footstep_boost.deactivate()
+            except Exception:
+                pass
             try:
                 if vol_endpoint is not None and self._master_touched:
                     vol_endpoint.SetMasterVolumeLevelScalar(self.user_target_master_vol, guid)

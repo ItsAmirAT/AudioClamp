@@ -22,7 +22,7 @@
           <line x1="19" y1="16.5" x2="19" y2="11.5" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
         <span class="brand-title">AUDIOCLAMP</span>
-        <span class="brand-version">v2.5</span>
+        <span class="brand-version">v2.6</span>
       </div>
 
       <div class="unified-status-pill" id="unifiedStatusPill">
@@ -172,6 +172,7 @@
             <span id="testAudioLabel">Test Audio</span>
           </button>
           <button class="card-info-btn" onclick="openSettingsGuide('test-audio')" title="How the acoustic test sandbox works">?</button>
+          <span class="guard-badge" id="guardBadge" title="Combat Guard is holding the volume down after recent gunfire">GUARD</span>
           <span class="phase-dot"></span>
           <span class="phase-text">Phase Linked</span>
         </div>
@@ -245,6 +246,15 @@
           <span class="hearing-safe-sub">hard cap · 150 ms combat hold</span>
           <button class="card-info-btn" type="button" onclick="event.preventDefault(); openSettingsGuide('hearing-safe')" title="What Hearing-Safe mode does">?</button>
         </label>
+        <div class="option-row" title="After a loud clamp, keep the volume down for 4 seconds so the first shot of the next burst arrives already reduced">
+          <span class="option-label">Combat Guard</span>
+          <div class="mini-pills" id="combatGuardPills">
+            <button class="mini-pill active" type="button" data-val="0" onclick="setCombatGuard(0)">Off</button>
+            <button class="mini-pill" type="button" data-val="4" onclick="setCombatGuard(4)">-4 dB</button>
+            <button class="mini-pill" type="button" data-val="8" onclick="setCombatGuard(8)">-8 dB</button>
+          </div>
+          <button class="card-info-btn" type="button" onclick="openSettingsGuide('combat-guard')" title="What Combat Guard does">?</button>
+        </div>
       </div>
 
       <!-- Footstep Recovery -->
@@ -264,6 +274,17 @@
           <button class="rec-tag active" id="btnRel_120" onclick="setReleaseMs(120)">120ms</button>
           <button class="rec-tag" id="btnRel_300" onclick="setReleaseMs(300)">300ms</button>
         </div>
+        <div class="option-row" title="Makes only the game louder: Windows volume goes up, every other app goes down by the same amount, and the ceiling drops so loud sounds stay where they were">
+          <span class="option-label">Footstep Boost</span>
+          <div class="mini-pills" id="footstepBoostPills">
+            <button class="mini-pill active" type="button" data-val="0" onclick="setFootstepBoost(0)">Off</button>
+            <button class="mini-pill" type="button" data-val="3" onclick="setFootstepBoost(3)">+3</button>
+            <button class="mini-pill" type="button" data-val="6" onclick="setFootstepBoost(6)">+6</button>
+            <button class="mini-pill" type="button" data-val="9" onclick="setFootstepBoost(9)">+9</button>
+          </div>
+          <button class="card-info-btn" type="button" onclick="openSettingsGuide('footstep-boost')" title="How Footstep Boost works">?</button>
+        </div>
+        <div class="boost-status" id="boostStatus">Off</div>
       </div>
     </div>
 
@@ -563,6 +584,58 @@
             <div class="guide-tip-box">
               <span class="guide-tip-label">TRADE-OFF:</span>
               <span class="guide-tip-text">Footsteps right after your own gunfire come back about 150 ms later, and distant versus close shots sound more alike. To stop the first crack too, use a sample-level limiter such as Equalizer APO with a lookahead limiter alongside AudioClamp.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3c. Combat Guard -->
+        <div class="guide-card" data-category="dynamics" id="guide-combat-guard">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">🛡️</span>
+              <span class="guide-item-name">Combat Guard</span>
+              <span class="guide-badge-live" id="guideBadge_guard">LIVE: Off</span>
+            </div>
+            <span class="guide-cat-tag">Dynamics</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">After any loud clamp of 3 dB or more, the volume may not recover above the guard depth (-4 or -8 dB) for 4 seconds. Every new shot during that time restarts the 4 seconds.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">WHY IT HELPS</span>
+              <p class="guide-text">Windows reports loudness about 30 ms late, so without a guard the first crack of every new burst plays at full level. With the guard on, the first shot of the next burst or engagement arrives already turned down. Footsteps sit about 30 dB below gunfire, so they stay clearly audible during the guard.</p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">TRY:</span>
+              <span class="guide-tip-text"><strong>-4 dB</strong> with Footstep Boost +3 to +6 for long firefights. The GUARD badge above the meter lights up while it is holding.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3d. Footstep Boost -->
+        <div class="guide-card" data-category="dynamics" id="guide-footstep-boost">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">👣</span>
+              <span class="guide-item-name">Footstep Boost</span>
+              <span class="guide-badge-live" id="guideBadge_boost">LIVE: Off</span>
+            </div>
+            <span class="guide-cat-tag">Dynamics</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">Makes only the game louder. AudioClamp raises the Windows volume by the chosen amount and lowers Discord, your browser and every other app by the same amount, so they sound exactly as before. At the same time the Loudness Ceiling drops by the same amount, so explosions and gunfire land where they did before while footsteps and other quiet sounds gain the full boost.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">WHEN IT WORKS</span>
+              <p class="guide-text">Only in Auto-Detect Game or Specific App mode, only while the limiter is ON, and only while the game is running. It needs room above your current Windows volume; if Windows is already near 100%, the boost is limited and the status line says so. Everything goes back to normal when the game closes, the limiter turns off, you press Panic Reset, or AudioClamp exits.</p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">IMPORTANT:</span>
+              <span class="guide-tip-text">The very first crack of a shot plays before any clamp can react, so it also gets the boost. Pair Footstep Boost with Combat Guard or Hearing-Safe, start at +3, and lower your headset volume if anything feels too loud.</span>
             </div>
           </div>
         </div>

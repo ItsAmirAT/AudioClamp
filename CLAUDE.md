@@ -11,7 +11,8 @@ AudioClamp is a Windows real-time audio peak limiter and dynamic range controlle
 ## Key Commands
 - **Run Source**: `python main.py`
 - **Syntax Validation**: `python -m compileall .` and `node -c ui/web/app.js`
-- **Build Executable**: `python build_exe.py`
+- **Build Executable**: `python build_exe.py` (exits non-zero on failure)
+- **Build Setup Installer**: `python build_exe.py --installer` → `dist/installer/AudioClamp-Setup-<version>.exe` (needs Inno Setup 6; version comes from `core/__init__.py`)
 - **Install Locally**: `powershell -ExecutionPolicy Bypass -File Install-AudioClamp.ps1`
 - **Check Mutex**: `powershell -Command "try { [System.Threading.Mutex]::OpenExisting('AudioClamp_SingleInstance_Mutex_391827'); 'HELD' } catch { 'FREE' }"`
 
@@ -23,6 +24,9 @@ AudioClamp is a Windows real-time audio peak limiter and dynamic range controlle
   - Tactical shooter profiles (PUBG, CS2, Tarkov) enforce a 4:1 soft-knee ratio with 5.0 dB knee width to preserve acoustic distance perception.
   - Hearing-Safe mode (`hearing_safe`, opt-in, off by default) is the only sanctioned override of the two rules above: it swaps the knee for a hard cap at the ceiling, replaces the adaptive hold with a 150 ms combat hold, and disables the fast release stage.
   - Windows refreshes per-session peak meters only about every 28 ms (measured on PUBG). The first crack of any transient always passes before a volume-based clamp lands; never claim otherwise in UI copy.
+  - Combat Guard (`combat_guard_db`, opt-in) may only cap how far gain recovers during combat; it must never push gain down in the release branch.
+  - Footstep Boost (`footstep_boost_db`, opt-in, `core/footstep_boost.py`) raises the master endpoint and lowers every non-target session by the same dB, and lowers the ceiling by the same dB. It must only run while the limiter is enabled and a session target is active, undo changes relative to current levels, and keep its crash-recovery file in sync. Panic Reset turns it off.
+  - Keep fixed-rate polling in the worker. Meter-synced wakes were measured: they cut CPU from ~1.4% to ~0.4% of a core but raised median reaction time from 1.5 ms to 5.4 ms because meter refresh times jitter. Reaction time wins.
 - **Windows COM Lifecycles**:
   - Background worker threads must invoke `CoInitializeEx(COINIT_MULTITHREADED)` and catch `OSError` if already initialized.
   - Default audio endpoint switching routes via native `IPolicyConfig` (`CLSID_PolicyConfigClient` / `IID_IPolicyConfig`).

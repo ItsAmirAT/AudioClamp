@@ -53,6 +53,12 @@ class WebviewApi:
     def set_hearing_safe(self, enabled):
         self._app.config.set("hearing_safe", bool(enabled))
 
+    def set_combat_guard(self, db_val):
+        self._app.config.set("combat_guard_db", max(0.0, min(12.0, float(db_val))))
+
+    def set_footstep_boost(self, db_val):
+        self._app.config.set("footstep_boost_db", max(0.0, min(12.0, float(db_val))))
+
     def set_release_ms(self, ms):
         self._app.config.set("release_ms", float(ms))
 
@@ -167,9 +173,11 @@ class WebviewApi:
         self._app.config.apply_profile(str(profile_name))
         cfg = self._app.config.config
         if self._app.window:
-            self._app.window.evaluate_js(f"receiveInitialConfig({json.dumps(cfg)})")
+            self._app._eval(f"receiveInitialConfig({json.dumps(cfg)})")
 
     def emergency_reset(self):
+        # Panic means "back to normal now": Footstep Boost goes off as well
+        self._app.config.set("footstep_boost_db", 0.0)
         self._app.engine.emergency_reset_volume()
         self._app.config.set("threshold_db", 0.0)
         self._app.config.set("threshold_percent", 100.0)
@@ -181,7 +189,7 @@ class WebviewApi:
         scalar = 10.0 ** (new_db / 20.0)
         self._app.config.set("threshold_percent", max(5.0, min(100.0, scalar * 100.0)))
         if self._app.window:
-            self._app.window.evaluate_js(f"if(window.nudgeCeiling) {{ window.nudgeCeiling({float(delta_db)}); }} else if(window.updateCeiling) {{ updateCeiling({round(new_db, 1)}); }}")
+            self._app._eval(f"if(window.nudgeCeiling) {{ window.nudgeCeiling({float(delta_db)}); }} else if(window.updateCeiling) {{ updateCeiling({round(new_db, 1)}); }}")
 
     def move_window(self, x, y):
         if self._app.window:
@@ -229,6 +237,7 @@ class WebviewWindow:
         self.is_visible = True
 
         self.is_mini_mode = False
+        self._needs_resync = False
         self._full_rect: Optional[tuple] = None
         self._mini_lock = threading.Lock()
 
@@ -267,32 +276,32 @@ class WebviewWindow:
         self.api.nudge_ceiling(-1.0)
 
     def _on_profile_auto_switched(self, profile_name: str):
-        if self.window:
-            cfg = self.config.config
-            try:
-                self.window.evaluate_js(f"if(window.receiveInitialConfig) receiveInitialConfig({json.dumps(cfg)}); if(window.showToast) showToast('Auto-Profile: {profile_name}', 'info');")
-            except Exception:
-                pass
+        cfg = self.config.config
+        self._eval(f"if(window.receiveInitialConfig) receiveInitialConfig({json.dumps(cfg)}); if(window.showToast) showToast('Auto-Profile: {profile_name}', 'info');")
 
     def toggle_enable(self):
         new_val = not self.config.get("enabled", True)
         self.api.toggle_enabled(new_val)
-        if self.window:
-            self.window.evaluate_js(f"document.getElementById('powerSwitch').checked = {json.dumps(new_val)}; document.getElementById('powerSwitch').dispatchEvent(new Event('change'));")
+        self._eval(f"document.getElementById('powerSwitch').checked = {json.dumps(new_val)}; document.getElementById('powerSwitch').dispatchEvent(new Event('change'));")
 
     def emergency_reset(self):
         self.api.emergency_reset()
-        if self.window:
-            self.window.evaluate_js("emergencyReset()")
+        self._eval("emergencyReset()")
 
     def show_window(self):
         if not self.window:
             return
+        self._set_webview_background(False)
         self.is_visible = True
         try:
             self.window.show()
             self.window.restore()
-            self.window.evaluate_js("if(window.onWindowShown) onWindowShown();")
+            if self._needs_resync:
+                # Anything that changed while the page was suspended (hotkeys, tray presets,
+                # auto-profile switches) is applied in one go
+                self._needs_resync = False
+                self._eval(f"receiveInitialConfig({json.dumps(self.config.config)})")
+            self._eval("if(window.onWindowShown) onWindowShown();")
         except Exception:
             pass
         try:
@@ -363,14 +372,51 @@ class WebviewWindow:
     def hide_window(self):
         if not self.window:
             return
-        self.is_visible = False
         try:
             self.window.evaluate_js("if(window.onWindowHidden) onWindowHidden();")
+        except Exception:
+            pass
+        self.is_visible = False
+        try:
             self.window.hide()
+            self._set_webview_background(True)
             import gc
             gc.collect()
         except Exception:
             pass
+
+    def _set_webview_background(self, background: bool) -> None:
+        """Tray mode: ask WebView2 to trim memory and suspend the page; undo on show.
+        Suspended pages run no scripts, so _eval() skips them and flags a resync instead."""
+        form = getattr(self.window, "native", None) if self.window else None
+        webview_ctl = getattr(getattr(form, "browser", None), "webview", None)
+        if form is None or webview_ctl is None:
+            return
+        try:
+            from System import Action
+            from Microsoft.Web.WebView2.Core import CoreWebView2MemoryUsageTargetLevel
+
+            def apply():
+                core = webview_ctl.CoreWebView2
+                if core is None:
+                    return
+                if background:
+                    core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low
+                    try:
+                        core.TrySuspendAsync()
+                    except Exception:
+                        pass  # only allowed while hidden; the memory target still applies
+                else:
+                    if core.IsSuspended:
+                        core.Resume()
+                    core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal
+
+            if form.InvokeRequired:
+                form.Invoke(Action(apply))
+            else:
+                apply()
+        except Exception as e:
+            print(f"[WebviewWindow] WebView2 background mode unavailable: {e}")
 
     def toggle_window_visibility(self):
         if self.is_visible:
@@ -475,11 +521,17 @@ class WebviewWindow:
             return self.is_mini_mode
 
     def _eval(self, js: str) -> None:
-        if self.window:
-            try:
-                self.window.evaluate_js(js)
-            except Exception:
-                pass
+        """Run script in the page, or remember to resync if the page is hidden and suspended.
+        evaluate_js waits for a result, so calling it on a suspended page could block the caller."""
+        if not self.window:
+            return
+        if not self.is_visible:
+            self._needs_resync = True
+            return
+        try:
+            self.window.evaluate_js(js)
+        except Exception:
+            pass
 
     def _on_telemetry_data(self, data: Dict[str, Any]):
         # Pacing (20 Hz active, 5 Hz below -60 dBFS) is handled by the engine. The payload

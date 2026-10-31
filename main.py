@@ -17,10 +17,6 @@ except Exception:
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.config_manager import ConfigManager
-from core.audio_engine import AudioEngine
-from ui.webview_window import WebviewWindow
-
 MUTEX_NAME = "AudioClamp_SingleInstance_Mutex_391827"
 
 def acquire_mutex():
@@ -40,7 +36,13 @@ def acquire_mutex():
     return mutex
 
 def main():
+    # Claim the single-instance mutex before loading the audio stack and WebView2, so a second
+    # launch hands off to the running copy without paying for those imports.
     mutex = acquire_mutex()
+
+    from core.config_manager import ConfigManager
+    from core.audio_engine import AudioEngine
+    from ui.webview_window import WebviewWindow
 
     config = ConfigManager()
     engine = AudioEngine(config)

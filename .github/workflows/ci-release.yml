@@ -1,0 +1,71 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify syntax & compilation
+        run: |
+          python -m compileall .
+          node -c ui/web/app.js
+
+      - name: Run test suite
+        run: |
+          python tests/test_footstep_boost.py
+          python tests/test_combat_guard.py
+          python tests/test_dsp_smoke.py
+          python tests/test_spray_sim.py
+
+      - name: Build Standalone Executable & Inno Setup Installer
+        run: python build_exe.py --installer
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioClamp-Binaries
+          path: |
+            dist/AudioClamp.exe
+            dist/installer/*.exe
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/AudioClamp.exe
+            dist/installer/*.exe
+          generate_release_notes: true
+          draft: false
+          prerelease: false

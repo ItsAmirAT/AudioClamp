@@ -25,7 +25,11 @@ let state = {
   is_window_visible: true,
   mini_mode: false,
   audio_test_active: false,
-  hearing_safe: false
+  hearing_safe: false,
+  combat_guard_db: 0,
+  combat_guard_active: false,
+  footstep_boost_db: 0,
+  boost_applied_db: 0
 };
 
 const canvas = document.getElementById("meterCanvas");
@@ -690,6 +694,73 @@ function refreshHearingSafeBadge() {
 
 window.setHearingSafe = setHearingSafe;
 
+function setPillGroup(groupId, value) {
+  document.querySelectorAll(`#${groupId} .mini-pill`).forEach(btn => {
+    btn.classList.toggle("active", parseFloat(btn.dataset.val) === value);
+  });
+}
+
+function setCombatGuard(db, silent = false) {
+  state.combat_guard_db = db;
+  setPillGroup("combatGuardPills", db);
+  updateGuideLiveBadges();
+  if (!silent) {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.set_combat_guard) {
+      window.pywebview.api.set_combat_guard(db);
+    }
+    showToast(db > 0 ? `Combat Guard: ${db} dB for 4 s after loud shots` : "Combat Guard: Off", db > 0 ? "success" : "info");
+  }
+}
+
+function setFootstepBoost(db, silent = false) {
+  state.footstep_boost_db = db;
+  setPillGroup("footstepBoostPills", db);
+  updateBoostStatus();
+  updateGuideLiveBadges();
+  if (!silent) {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.set_footstep_boost) {
+      window.pywebview.api.set_footstep_boost(db);
+    }
+    if (db > 0 && !state.combat_guard_db && !state.hearing_safe) {
+      showToast(`Footstep Boost: +${db} dB. Tip: add Combat Guard so first shots stay comfortable`, "info");
+    } else {
+      showToast(db > 0 ? `Footstep Boost: +${db} dB on the game only` : "Footstep Boost: Off", db > 0 ? "success" : "info");
+    }
+  }
+}
+
+// Explains what the boost is actually doing right now, since it depends on mode and headroom
+function updateBoostStatus() {
+  const el = document.getElementById("boostStatus");
+  if (!el) return;
+  const req = state.footstep_boost_db;
+  const applied = state.boost_applied_db || 0;
+  let text = "Off";
+  let cls = "";
+  if (req > 0) {
+    if (!state.enabled) {
+      text = "Paused: limiter is off";
+      cls = "warn";
+    } else if (state.target_mode === "master_device") {
+      text = "Needs Auto-Detect Game or Specific App";
+      cls = "warn";
+    } else if (!state.is_game_isolated) {
+      text = "Waiting for the game to start";
+    } else if (applied + 0.05 < req) {
+      text = applied > 0.05 ? `Limited to +${applied.toFixed(1)} dB: Windows volume is near max` : "No room: Windows volume is at max";
+      cls = "warn";
+    } else {
+      text = `Active: game +${applied.toFixed(1)} dB, other apps unchanged`;
+      cls = "on";
+    }
+  }
+  el.textContent = text;
+  el.className = `boost-status ${cls}`;
+}
+
+window.setCombatGuard = setCombatGuard;
+window.setFootstepBoost = setFootstepBoost;
+
 const SCOPE_LABELS = { auto_game: "Auto-Detect Game", specific_app: "Specific App", master_device: "Master PC" };
 
 function setScope(mode, silent = false) {
@@ -1052,6 +1123,7 @@ window.nudgeCeiling = function(delta) {
 };
 
 function emergencyReset() {
+  setFootstepBoost(0, true);
   updateCeiling(0.0);
   showToast("Panic Reset: Volume Ceiling set to 100% (0 dB)", "warning");
   if (window.pywebview && window.pywebview.api) {
@@ -1380,6 +1452,11 @@ function updateGuideLiveBadges() {
     pSafe.style.color = state.hearing_safe ? "var(--accent-emerald)" : "var(--text-muted)";
   }
 
+  const pGuard = document.getElementById("guideBadge_guard");
+  if (pGuard) pGuard.innerText = state.combat_guard_db > 0 ? `LIVE: -${state.combat_guard_db} dB` : "LIVE: Off";
+  const pBoost = document.getElementById("guideBadge_boost");
+  if (pBoost) pBoost.innerText = state.footstep_boost_db > 0 ? `LIVE: +${state.footstep_boost_db} dB` : "LIVE: Off";
+
   const pRelease = document.getElementById("guideBadge_release");
   if (pRelease) {
     pRelease.innerText = `LIVE: ${state.release_ms} ms`;
@@ -1457,6 +1534,14 @@ window.receiveTelemetry = function(data) {
   state.is_app_running = data.is_app_running ?? true;
   state.auto_watch_status = data.auto_watch_status || "";
 
+  state.boost_applied_db = data.footstep_boost_db || 0;
+  const guardNow = !!data.combat_guard_active;
+  if (guardNow !== state.combat_guard_active) {
+    state.combat_guard_active = guardNow;
+    const badge = document.getElementById("guardBadge");
+    if (badge) badge.classList.toggle("on", guardNow);
+  }
+
   const now = performance.now();
   pushHistory(state.peak, state.output_peak, now);
   // Only wake the canvas when there is something new to draw
@@ -1527,6 +1612,7 @@ window.receiveTelemetry = function(data) {
       }
     }
 
+    updateBoostStatus();
     const guideModal = document.getElementById("settingsGuideModal");
     if (guideModal && guideModal.style.display === "flex") {
       updateGuideLiveBadges();
@@ -1586,6 +1672,8 @@ window.receiveInitialConfig = function(cfg) {
   state.hearing_safe = cfg.hearing_safe ?? false;
   setKneeMode(state.knee_mode, true);
   setHearingSafe(state.hearing_safe, true);
+  setCombatGuard(cfg.combat_guard_db ?? 0, true);
+  setFootstepBoost(cfg.footstep_boost_db ?? 0, true);
 
   const rSlider = document.getElementById("releaseSlider");
   if (rSlider) {
