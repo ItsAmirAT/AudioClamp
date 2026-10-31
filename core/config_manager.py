@@ -98,6 +98,17 @@ GAME_PROFILES: Dict[str, Dict[str, Any]] = {
     }
 }
 
+def _exe_stem(name: str) -> str:
+    return name.lower().removesuffix(".exe")
+
+# Precomputed lookups so the limiter thread never rebuilds these per tick
+EXE_TO_PROFILE: Dict[str, str] = {
+    exe.lower(): prof_name
+    for prof_name, prof in GAME_PROFILES.items()
+    for exe in prof.get("exe_names", [])
+}
+GAME_EXE_STEMS: frozenset = frozenset(_exe_stem(exe) for exe in EXE_TO_PROFILE)
+
 DEFAULT_CONFIG: Dict[str, Any] = {
     "enabled": True,
     "auto_watch_mode": True,
@@ -130,17 +141,21 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "poll_cadence_ms": 3.0,
     "eco_mode": False,
     "adaptive_ballistics": True,
+    "hearing_safe": False,
     "auto_profile_switch": True,
     "hotkey_toggle": "ctrl+alt+l",
     "hotkey_emergency_reset": "ctrl+alt+r",
     "hotkey_nudge_up": "ctrl+alt+up",
     "hotkey_nudge_down": "ctrl+alt+down",
+    "hotkey_mini_mode": "ctrl+alt+m",
 }
 
 class ConfigManager:
     def __init__(self):
         os.makedirs(APPDATA_DIR, exist_ok=True)
         self.config: Dict[str, Any] = self.load_config()
+        # Incremented on every mutation so readers can cache settings and refresh only on change
+        self.revision: int = 0
         self._cleanup_legacy_registry()
 
     def _cleanup_legacy_registry(self):
@@ -178,6 +193,7 @@ class ConfigManager:
 
     def set(self, key: str, value: Any, save: bool = True):
         self.config[key] = value
+        self.revision += 1
         if save:
             self.save_config()
 
@@ -194,6 +210,7 @@ class ConfigManager:
             self.config["release_ms"] = p["release_ms"]
             self.config["stereo_linked"] = p["stereo_linked"]
             self.config["selected_profile"] = profile_name
+            self.revision += 1
             self.save_config()
 
     def add_monitored_app(self, exe_name: str):
@@ -203,12 +220,14 @@ class ConfigManager:
             if not any(a.lower() == clean.lower() for a in apps):
                 apps.append(clean)
                 self.config["monitored_apps"] = apps
+                self.revision += 1
                 self.save_config()
 
     def remove_monitored_app(self, exe_name: str):
         clean = str(exe_name).strip().lower()
         apps = [a for a in self.config.get("monitored_apps", []) if a.lower() != clean]
         self.config["monitored_apps"] = apps
+        self.revision += 1
         self.save_config()
 
     def save_recovery_state(self, target_type: str, target_name: str, original_volume: float):

@@ -50,6 +50,9 @@ class WebviewApi:
             self._app.config.set("compression_ratio", 50.0)
             self._app.config.set("knee_width_db", 0.5)
 
+    def set_hearing_safe(self, enabled):
+        self._app.config.set("hearing_safe", bool(enabled))
+
     def set_release_ms(self, ms):
         self._app.config.set("release_ms", float(ms))
 
@@ -110,6 +113,27 @@ class WebviewApi:
                 except Exception:
                     pass
         return sorted(list(procs), key=lambda x: x.lower())
+
+    def get_audio_streams(self):
+        """Audio sessions ranked with apps currently producing sound first."""
+        return self._app.engine.sample_audio_streams()
+
+    def begin_audio_test(self):
+        """Route this window's own audio through the limiter for the test sandbox."""
+        self._app.engine.begin_audio_test()
+        return {
+            "enabled": bool(self._app.config.get("enabled", True)),
+            "target_mode": self._app.config.get("target_mode", "auto_game"),
+        }
+
+    def end_audio_test(self):
+        self._app.engine.end_audio_test()
+
+    def toggle_mini_mode(self):
+        return self._app.set_mini_mode(not self._app.is_mini_mode)
+
+    def set_mini_mode(self, enabled):
+        return self._app.set_mini_mode(bool(enabled))
 
     def browse_for_exe(self):
         if not self._app.window:
@@ -204,20 +228,23 @@ class WebviewWindow:
         self.is_exiting = False
         self.is_visible = True
 
-        self.last_telemetry_time = 0.0
-        self.telemetry_interval = 0.016
+        self.is_mini_mode = False
+        self._full_rect: Optional[tuple] = None
+        self._mini_lock = threading.Lock()
 
         self.hotkey_mgr = HotkeyManager(
             on_toggle=self.toggle_enable,
             on_reset=self.emergency_reset,
             on_nudge_up=self.nudge_ceiling_up,
-            on_nudge_down=self.nudge_ceiling_down
+            on_nudge_down=self.nudge_ceiling_down,
+            on_mini_mode=self.toggle_mini_mode
         )
         self.hotkey_mgr.register_hotkeys(
             self.config.get("hotkey_toggle", "ctrl+alt+l"),
             self.config.get("hotkey_emergency_reset", "ctrl+alt+r"),
             self.config.get("hotkey_nudge_up", "ctrl+alt+up"),
-            self.config.get("hotkey_nudge_down", "ctrl+alt+down")
+            self.config.get("hotkey_nudge_down", "ctrl+alt+down"),
+            self.config.get("hotkey_mini_mode", "ctrl+alt+m")
         )
 
         self.tray_mgr = TrayIconManager(
@@ -363,16 +390,105 @@ class WebviewWindow:
                 pass
         sys.exit(0)
 
+    # ------------------------------------------------------------------
+    # Compact HUD / mini-player mode
+    # ------------------------------------------------------------------
+    MINI_SIZE = (440, 148)
+    FULL_MIN_SIZE = (880, 760)
+
+    def toggle_mini_mode(self):
+        self.set_mini_mode(not self.is_mini_mode)
+
+    def _apply_native_form(self, min_size: tuple, top_most: bool) -> float:
+        """Update WinForms MinimumSize and TopMost on the UI thread. Returns the DPI scale."""
+        form = getattr(self.window, "native", None) if self.window else None
+        scale = float(getattr(form, "_scale", 1.0) or 1.0) if form is not None else 1.0
+        if form is None:
+            return scale
+        try:
+            from System import Action
+            from System.Drawing import Size
+
+            def apply():
+                form.MinimumSize = Size(int(min_size[0] * scale), int(min_size[1] * scale))
+                form.TopMost = top_most
+
+            if form.InvokeRequired:
+                form.Invoke(Action(apply))
+            else:
+                apply()
+        except Exception as e:
+            print(f"[WebviewWindow] Could not update native window constraints: {e}")
+        return scale
+
+    def _get_hwnd(self) -> int:
+        form = getattr(self.window, "native", None) if self.window else None
+        try:
+            return int(form.Handle.ToInt64()) if form is not None else 0
+        except Exception:
+            return 0
+
+    def set_mini_mode(self, enabled: bool) -> bool:
+        if not self.window:
+            return self.is_mini_mode
+        with self._mini_lock:
+            if enabled == self.is_mini_mode:
+                return self.is_mini_mode
+            import ctypes
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+            hwnd = self._get_hwnd()
+            SWP_NOZORDER = 0x0004
+            SWP_NOACTIVATE = 0x0010
+
+            if enabled:
+                if not self.is_visible:
+                    self.show_window()
+                if self.is_maximized:
+                    try:
+                        self.window.restore()
+                    except Exception:
+                        pass
+                    self.is_maximized = False
+                rect = wintypes.RECT()
+                if hwnd and user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                    self._full_rect = (rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
+                scale = self._apply_native_form((320, 120), True)
+                self._eval("if(window.setMiniModeUI) setMiniModeUI(true);")
+                w, h = int(self.MINI_SIZE[0] * scale), int(self.MINI_SIZE[1] * scale)
+                if hwnd and self._full_rect:
+                    # Anchor the HUD to the top-right corner of where the full window was
+                    x = self._full_rect[0] + self._full_rect[2] - w
+                    user32.SetWindowPos(hwnd, None, x, self._full_rect[1], w, h, SWP_NOZORDER | SWP_NOACTIVATE)
+                else:
+                    self.window.resize(*self.MINI_SIZE)
+                self.is_mini_mode = True
+            else:
+                self._eval("if(window.setMiniModeUI) setMiniModeUI(false);")
+                if hwnd and self._full_rect:
+                    x, y, w, h = self._full_rect
+                    user32.SetWindowPos(hwnd, None, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE)
+                else:
+                    self.window.resize(1000, 940)
+                self._apply_native_form(self.FULL_MIN_SIZE, False)
+                self.is_mini_mode = False
+            return self.is_mini_mode
+
+    def _eval(self, js: str) -> None:
+        if self.window:
+            try:
+                self.window.evaluate_js(js)
+            except Exception:
+                pass
+
     def _on_telemetry_data(self, data: Dict[str, Any]):
-        now = time.perf_counter()
-        if now - self.last_telemetry_time >= self.telemetry_interval:
-            self.last_telemetry_time = now
-            if self.window and self.is_visible:
-                try:
-                    js_code = f"receiveTelemetry({json.dumps(data)});"
-                    self.window.evaluate_js(js_code)
-                except Exception:
-                    pass
+        # Pacing (20 Hz active, 5 Hz below -60 dBFS) is handled by the engine. The payload
+        # dict is reused by the engine, so it must be serialized here, synchronously.
+        if self.window and self.is_visible:
+            try:
+                self.window.evaluate_js(f"receiveTelemetry({json.dumps(data)});")
+            except Exception:
+                pass
 
     def run(self, start_minimized: bool = False):
         try:

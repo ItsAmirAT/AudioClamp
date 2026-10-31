@@ -19,8 +19,10 @@ AudioClamp is a Windows real-time audio peak limiter and dynamic range controlle
 - **Single-Instance Mutex**: Process ownership uses `AudioClamp_SingleInstance_Mutex_391827`. Always verify the mutex is FREE before/after tasks; never leave hanging processes when building.
 - **Limiter DSP Invariants**:
   - Attack phase only engages when downward attenuation is required (`target_att < current_att`). Never increase gain in the attack branch.
-  - Release phase uses exponential decay (`max(0.040, release_ms / 1000.0)`) with an adaptive 25–35ms transient hold to prevent gunshot echo surges and overlapping sound disruption.
+  - Release phase uses two-stage exponential decay: at the 40 ms floor while more than 3 dB of reduction remains, then `max(0.040, release_ms / 1000.0)` for the last 3 dB. The time constant never drops below 40 ms. An adaptive 25–38ms transient hold (`release_ms / 3500`) prevents gunshot echo surges and overlapping sound disruption.
   - Tactical shooter profiles (PUBG, CS2, Tarkov) enforce a 4:1 soft-knee ratio with 5.0 dB knee width to preserve acoustic distance perception.
+  - Hearing-Safe mode (`hearing_safe`, opt-in, off by default) is the only sanctioned override of the two rules above: it swaps the knee for a hard cap at the ceiling, replaces the adaptive hold with a 150 ms combat hold, and disables the fast release stage.
+  - Windows refreshes per-session peak meters only about every 28 ms (measured on PUBG). The first crack of any transient always passes before a volume-based clamp lands; never claim otherwise in UI copy.
 - **Windows COM Lifecycles**:
   - Background worker threads must invoke `CoInitializeEx(COINIT_MULTITHREADED)` and catch `OSError` if already initialized.
   - Default audio endpoint switching routes via native `IPolicyConfig` (`CLSID_PolicyConfigClient` / `IID_IPolicyConfig`).

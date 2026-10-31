@@ -23,7 +23,8 @@
   margin: 0;
   padding: 0;
   user-select: none;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -387,7 +388,7 @@ body {
 }
 
 .hdr-btn-text {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   letter-spacing: 0.2px;
 }
 
@@ -498,11 +499,15 @@ body {
 /* General Card */
 .card {
   background: var(--bg-card);
-  backdrop-filter: blur(14px);
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 9px 14px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  border-color: rgba(255, 255, 255, 0.13);
 }
 
 .card-heading {
@@ -1682,4 +1687,413 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 .guide-tip-text {
   color: #e2e8f0;
+}
+
+/* ==========================================
+   Interaction feedback
+   ========================================== */
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled):active,
+.profile-item:active,
+.monitored-chip:active {
+  transform: scale(0.97);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+input[type="range"] {
+  transition: filter 0.15s ease;
+}
+
+input[type="range"]:hover {
+  filter: brightness(1.15);
+}
+
+/* Toasts: text-only content, coalesced updates pulse instead of stacking */
+.toast-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.toast-text {
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.1px;
+}
+
+.toast.bump {
+  animation: toastBump 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes toastBump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+/* Stream scan button state */
+.drawer-btn.refresh.scanning {
+  pointer-events: none;
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  animation: scanPulse 0.9s ease-in-out infinite;
+}
+
+@keyframes scanPulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(0, 242, 254, 0); }
+  50% { box-shadow: 0 0 10px var(--accent-cyan-glow); }
+}
+
+.drawer-select optgroup {
+  background: #0b1120;
+  color: var(--text-subtle);
+  font-weight: 800;
+}
+
+/* ==========================================
+   Test Audio button (acoustic sandbox)
+   ========================================== */
+.btn-test-audio {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  margin-right: 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 242, 254, 0.35);
+  background: rgba(0, 242, 254, 0.06);
+  color: var(--accent-cyan);
+  font-family: 'Inter', sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
+}
+
+.btn-test-audio:hover {
+  background: rgba(0, 242, 254, 0.12);
+  box-shadow: 0 0 10px var(--accent-cyan-glow);
+}
+
+.test-audio-icon {
+  font-size: 12px;
+}
+
+.btn-test-audio.playing {
+  border-color: var(--accent-crimson);
+  color: #ffffff;
+  background: rgba(255, 42, 95, 0.12);
+  box-shadow: 0 0 10px var(--accent-crimson-glow);
+}
+
+/* Progress sweep along the bottom edge for the length of the clip */
+.btn-test-audio::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--accent-crimson);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.btn-test-audio.playing::after {
+  animation: testProgress var(--test-duration, 5.4s) linear forwards;
+}
+
+@keyframes testProgress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* Mini mode header button */
+.btn-hdr-action.mini-btn:hover,
+.btn-hdr-action.mini-btn.active {
+  border-color: rgba(0, 242, 254, 0.4);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+}
+
+/* ==========================================
+   Compact HUD / mini-player mode
+   ========================================== */
+.mini-hud {
+  display: none;
+}
+
+body.mini-mode .titlebar,
+body.mini-mode .main-content,
+body.mini-mode .footer-bar,
+body.mini-mode .toast-container,
+body.mini-mode .guide-modal-backdrop,
+body.mini-mode .device-menu-popover {
+  display: none !important;
+}
+
+body.mini-mode .mini-hud {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0 12px 10px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(0, 242, 254, 0.06), transparent 55%),
+    var(--bg-primary);
+  animation: fadeIn 0.18s ease;
+}
+
+.mini-hud-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  flex-shrink: 0;
+  cursor: grab;
+}
+
+.mini-hud-bar:active {
+  cursor: grabbing;
+}
+
+.mini-hud-shield {
+  width: 15px;
+  height: 15px;
+  filter: drop-shadow(0 0 4px var(--accent-cyan-glow));
+}
+
+.mini-hud-title {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  color: var(--text-main);
+}
+
+.mini-hud-status {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--accent-emerald);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.1);
+  transition: all 0.2s ease;
+}
+
+.mini-hud-status.off {
+  color: var(--accent-crimson);
+  border-color: rgba(255, 42, 95, 0.4);
+  background: rgba(255, 42, 95, 0.1);
+}
+
+.mini-hud-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.mini-hud-btn {
+  width: 22px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mini-hud-btn:hover {
+  color: var(--accent-cyan);
+  border-color: rgba(0, 242, 254, 0.4);
+}
+
+.mini-hud-btn.close:hover {
+  color: #ffffff;
+  background: var(--accent-crimson);
+  border-color: var(--accent-crimson);
+}
+
+.mini-hud-readouts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.mini-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border-color);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mini-stat-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-subtle);
+}
+
+.mini-stat-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.mini-stat-unit {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-subtle);
+}
+
+.mini-stat.limit .mini-stat-val {
+  color: var(--accent-crimson);
+}
+
+.mini-stat.gr .mini-stat-val {
+  color: var(--text-muted);
+  transition: color 0.12s ease;
+}
+
+.mini-hud.clamping .mini-stat.gr {
+  border-color: rgba(255, 42, 95, 0.5);
+  box-shadow: 0 0 10px rgba(255, 42, 95, 0.25);
+}
+
+.mini-hud.clamping .mini-stat.gr .mini-stat-val {
+  color: var(--accent-crimson);
+}
+
+.mini-meter {
+  position: relative;
+  height: 10px;
+  margin-top: 9px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.mini-meter-fill,
+.mini-meter-out,
+.mini-gr-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.06s linear;
+  will-change: transform;
+}
+
+.mini-meter-fill {
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.35), rgba(245, 158, 11, 0.35) 66%, rgba(255, 42, 95, 0.45));
+}
+
+.mini-meter-out {
+  top: 3px;
+  bottom: 3px;
+  background: linear-gradient(90deg, var(--accent-emerald), var(--accent-cyan));
+  box-shadow: 0 0 6px var(--accent-cyan-glow);
+}
+
+.mini-meter-ceiling {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent-crimson);
+  box-shadow: 0 0 6px var(--accent-crimson-glow);
+  transition: left 0.15s ease;
+}
+
+.mini-gr-track {
+  position: relative;
+  height: 3px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.mini-gr-fill {
+  transform-origin: right center;
+  background: var(--accent-crimson);
+}
+
+/* ==========================================
+   Reduced motion
+   ========================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Hearing-Safe toggle inside the Dynamics Mode card */
+.hearing-safe-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card-inner);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hearing-safe-row:hover {
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.hearing-safe-text {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.hearing-safe-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-subtle);
+  margin-right: auto;
+}
+
+.dynamics-col-card.hearing-safe-on .hearing-safe-row {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.18);
+}
+
+.dynamics-col-card.hearing-safe-on .hearing-safe-text,
+.dynamics-col-card.hearing-safe-on .dynamics-ratio-badge {
+  color: var(--accent-emerald);
 }

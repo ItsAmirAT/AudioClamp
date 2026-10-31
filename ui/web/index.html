@@ -5,7 +5,7 @@
   <title>AudioClamp — Studio Peak Limiter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -22,7 +22,7 @@
           <line x1="19" y1="16.5" x2="19" y2="11.5" stroke="#00f2fe" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
         <span class="brand-title">AUDIOCLAMP</span>
-        <span class="brand-version">v2.4</span>
+        <span class="brand-version">v2.5</span>
       </div>
 
       <div class="unified-status-pill" id="unifiedStatusPill">
@@ -48,6 +48,11 @@
     </div>
 
     <div class="titlebar-right" onmousedown="event.stopPropagation();">
+      <button class="btn-hdr-action mini-btn" id="btnMiniMode" onclick="toggleMiniMode()" title="Compact HUD: floating always-on-top meter (Ctrl+Alt+M)">
+        <span class="hdr-btn-icon">▣</span>
+        <span class="hdr-btn-text">Mini</span>
+      </button>
+
       <button class="btn-hdr-action guide-btn" id="btnOpenGuide" onclick="openSettingsGuide()" title="Settings & Audio Dynamics Guide">
         <span class="hdr-btn-icon">📖</span>
         <span class="hdr-btn-text">Guide</span>
@@ -148,7 +153,7 @@
           <input type="text" id="customProcessInput" class="drawer-input" placeholder="e.g. cs2.exe">
           <button class="drawer-btn" onclick="addCustomInputProcess()">+ Add .exe</button>
           <button class="drawer-btn browse" onclick="browseExeFile()">📁 Browse PC</button>
-          <button class="drawer-btn refresh" onclick="refreshAudioProcesses()" title="Refresh running audio apps">🔄 Scan</button>
+          <button class="drawer-btn refresh" id="btnScanStreams" onclick="refreshAudioProcesses(true)" title="Listen to every audio session briefly and list apps producing sound right now first">🔊 Scan Active Streams</button>
         </div>
       </div>
     </div>
@@ -162,6 +167,11 @@
           <span class="meter-lookahead">1.0ms Lookahead</span>
         </div>
         <div class="meter-header-right">
+          <button class="btn-test-audio" id="btnTestAudio" type="button" onclick="toggleAudioTest()" title="Play a synthesized gunfight through the limiter to preview your ceiling and footstep recovery">
+            <span class="test-audio-icon">🔊</span>
+            <span id="testAudioLabel">Test Audio</span>
+          </button>
+          <button class="card-info-btn" onclick="openSettingsGuide('test-audio')" title="How the acoustic test sandbox works">?</button>
           <span class="phase-dot"></span>
           <span class="phase-text">Phase Linked</span>
         </div>
@@ -226,6 +236,15 @@
           <button class="seg-btn" id="kneeBrickBtn" onclick="setKneeMode('brickwall')">Brickwall (∞:1)</button>
           <input type="checkbox" id="kneeSwitch" checked style="display:none;">
         </div>
+        <label class="hearing-safe-row" title="Hard cap at your ceiling plus a 150 ms combat hold, so rounds after the first one in a burst arrive already turned down">
+          <div class="stitch-switch mini">
+            <input type="checkbox" id="hearingSafeSwitch" onchange="setHearingSafe(this.checked)">
+            <span class="stitch-slider"></span>
+          </div>
+          <span class="hearing-safe-text">Hearing-Safe</span>
+          <span class="hearing-safe-sub">hard cap · 150 ms combat hold</span>
+          <button class="card-info-btn" type="button" onclick="event.preventDefault(); openSettingsGuide('hearing-safe')" title="What Hearing-Safe mode does">?</button>
+        </label>
       </div>
 
       <!-- Footstep Recovery -->
@@ -367,7 +386,46 @@
       <span class="hotkey-label">Hotkeys:</span>
       <kbd class="hotkey-badge" title="Toggle Limiter">[Ctrl+Alt+L]</kbd>
       <kbd class="hotkey-badge" title="Nudge Ceiling Up/Down">[Ctrl+Alt+↑/↓]</kbd>
+      <kbd class="hotkey-badge" title="Toggle Compact HUD">[Ctrl+Alt+M]</kbd>
     </div>
+  </div>
+
+  <!-- Compact HUD (mini-player mode) -->
+  <div class="mini-hud" id="miniHud">
+    <div class="mini-hud-bar">
+      <svg class="mini-hud-shield" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 2L24 6.5V14C24 20.2 19.8 24.8 14 26C8.2 24.8 4 20.2 4 14V6.5L14 2Z" fill="rgba(0, 242, 254, 0.08)" stroke="#00f2fe" stroke-width="2"/>
+      </svg>
+      <span class="mini-hud-title">AUDIOCLAMP</span>
+      <span class="mini-hud-status" id="miniHudStatus">ONLINE</span>
+      <div class="mini-hud-actions">
+        <button class="mini-hud-btn" onclick="toggleMiniMode()" title="Expand to full view (Ctrl+Alt+M)">⤢</button>
+        <button class="mini-hud-btn close" onclick="closeWindow()" title="Close to tray">&times;</button>
+      </div>
+    </div>
+    <div class="mini-hud-readouts">
+      <div class="mini-stat">
+        <span class="mini-stat-label">PEAK</span>
+        <span class="mini-stat-val" id="miniPeakVal">-∞</span>
+        <span class="mini-stat-unit">dB</span>
+      </div>
+      <div class="mini-stat limit">
+        <span class="mini-stat-label">LIMIT</span>
+        <span class="mini-stat-val" id="miniLimitVal">-12.0</span>
+        <span class="mini-stat-unit">dB</span>
+      </div>
+      <div class="mini-stat gr">
+        <span class="mini-stat-label">GR</span>
+        <span class="mini-stat-val" id="miniGrVal">0.0</span>
+        <span class="mini-stat-unit">dB</span>
+      </div>
+    </div>
+    <div class="mini-meter" title="Input peak (dim), output after clamping (bright), limit ceiling (red line)">
+      <div class="mini-meter-fill" id="miniMeterFill"></div>
+      <div class="mini-meter-out" id="miniMeterOut"></div>
+      <div class="mini-meter-ceiling" id="miniMeterCeiling"></div>
+    </div>
+    <div class="mini-gr-track"><div class="mini-gr-fill" id="miniGrFill"></div></div>
   </div>
 
   <!-- Settings & Audio Dynamics Guide Modal Overlay -->
@@ -479,6 +537,32 @@
             <div class="guide-tip-box">
               <span class="guide-tip-label">RECOMMENDATION:</span>
               <span class="guide-tip-text">Always use <strong>Soft-Knee (4:1)</strong> for tactical shooters (PUBG, CS2, Tarkov, Warzone). Use <strong>Brickwall</strong> for late-night movie watching or extreme hearing sensitivity.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3b. Hearing-Safe Mode -->
+        <div class="guide-card" data-category="dynamics" id="guide-hearing-safe">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">🦻</span>
+              <span class="guide-item-name">Hearing-Safe Mode</span>
+              <span class="guide-badge-live" id="guideBadge_hearingsafe">LIVE: Off</span>
+            </div>
+            <span class="guide-cat-tag">Dynamics</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">A protection-first override. Loud sounds are held at your Loudness Ceiling instead of 4 dB above it (Soft-Knee lets some overshoot through to keep distance cues). After any clamp, gain stays down for 150 ms before recovering.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">WHY THE HOLD MATTERS</span>
+              <p class="guide-text">Windows only refreshes each app's loudness reading about every 30 ms, so the very first crack of a shot or grenade always plays before any volume-based limiter can react. The combat hold means every round after the first one in a spray arrives while the volume is already down, which is where most of the ear fatigue in a firefight comes from.</p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">TRADE-OFF:</span>
+              <span class="guide-tip-text">Footsteps right after your own gunfire come back about 150 ms later, and distant versus close shots sound more alike. To stop the first crack too, use a sample-level limiter such as Equalizer APO with a lookahead limiter alongside AudioClamp.</span>
             </div>
           </div>
         </div>
@@ -600,7 +684,53 @@
           </div>
         </div>
 
-        <!-- 8. Eco Mode -->
+        <!-- 8. Acoustic Test Sandbox -->
+        <div class="guide-card" data-category="limiting" id="guide-test-audio">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">🔊</span>
+              <span class="guide-item-name">Test Audio (Acoustic Sandbox)</span>
+            </div>
+            <span class="guide-cat-tag">Preview</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">A five-second synthesized firefight: quiet footsteps over a faint ambience bed, a 3-round burst, then one heavy close shot with a reverb tail. Everything is generated live in the app, with no sound files involved.</p>
+            </div>
+            <div class="guide-block">
+              <span class="guide-subhead">HOW IT WORKS</span>
+              <p class="guide-text">While the test plays, AudioClamp temporarily clamps its own audio session the same way it clamps a game, so you hear and see your real settings at work. Footsteps sit around -30 dBFS and should pass untouched. The shots peak near -3 dBFS and should light up the GR meter. Listen for how fast the footsteps return after the burst to judge your Footstep Recovery setting.</p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">GOOD TO KNOW:</span>
+              <span class="guide-tip-text">The limiter must be ONLINE to run the test. If a game is clamped at the same moment, both share one gain reduction for those five seconds. The limiter reacts within a few milliseconds of each transient, so the very first edge of a shot can pass before the clamp engages.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 9. Compact HUD -->
+        <div class="guide-card" data-category="scope" id="guide-compact-hud">
+          <div class="guide-card-header">
+            <div class="guide-card-title-left">
+              <span class="guide-item-icon">▣</span>
+              <span class="guide-item-name">Compact HUD (Mini-Player)</span>
+            </div>
+            <span class="guide-cat-tag">Layout</span>
+          </div>
+          <div class="guide-card-body">
+            <div class="guide-block">
+              <span class="guide-subhead">WHAT IT IS</span>
+              <p class="guide-text">Collapses AudioClamp into a small always-on-top meter showing the live peak, your limit ceiling, and current gain reduction. Drag it by its top bar onto a second screen.</p>
+            </div>
+            <div class="guide-tip-box">
+              <span class="guide-tip-label">SHORTCUT:</span>
+              <span class="guide-tip-text">Press <strong>Ctrl+Alt+M</strong> anywhere, even in game, to toggle between the HUD and the full window.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10. Eco Mode -->
         <div class="guide-card" data-category="scope" id="guide-eco-mode">
           <div class="guide-card-header">
             <div class="guide-card-title-left">
