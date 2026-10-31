@@ -1,0 +1,30 @@
+# AudioClamp companion profile for Equalizer APO
+#
+# Equalizer APO processes the actual audio samples before they reach your headset, so a
+# lookahead limiter placed after this file catches the first crack of a gunshot or grenade,
+# which AudioClamp's volume-based clamp cannot reach in time.
+#
+# Setup:
+#   1. Copy this file into  C:\Program Files\EqualizerAPO\config\
+#   2. Add this line to config.txt in the same folder (or use the Configuration Editor):
+#        Include: AudioClamp-Footsteps.txt
+#   3. Below that Include, add the LoudMax VST plugin in the Configuration Editor
+#      (Plugins > VST plugin) and set Threshold -10 dB, Output -6 dB.
+#   4. Lower your headset or Windows volume until normal gameplay sounds as loud as before.
+#      Footsteps end up about 10 dB louder relative to explosions and gunfire.
+#
+# Everything on this output device passes through here, including Discord.
+
+# Headroom so the EQ boosts below cannot clip before the limiter
+Preamp: -6 dB
+
+# Trim sub-bass rumble from explosions and vehicles that masks footsteps
+Filter: ON HP Fc 30 Hz
+Filter: ON LS Fc 150 Hz Gain -4 dB
+
+# Lift the 1-4 kHz band where footsteps, reloads and gear rustle carry
+Filter: ON PK Fc 2000 Hz Gain 5 dB Q 0.9
+Filter: ON PK Fc 3500 Hz Gain 3 dB Q 1.2
+
+# Soften the harsh top end of gunshot cracks
+Filter: ON PK Fc 7500 Hz Gain -3 dB Q 1.0
